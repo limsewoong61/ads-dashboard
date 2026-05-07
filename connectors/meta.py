@@ -43,7 +43,9 @@ def get_meta_data(app_id, app_secret, access_token, ad_account_id, start_date, e
     rows = []
     while url:
         resp = requests.get(url, params=params)
-        resp.raise_for_status()
+        if not resp.ok:
+            err = resp.json().get("error", {})
+            raise RuntimeError(f"META API 오류 ({resp.status_code}): {err.get('message', resp.text)}")
         body = resp.json()
 
         for insight in body.get("data", []):

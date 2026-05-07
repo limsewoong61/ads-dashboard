@@ -3,6 +3,7 @@ import hmac as _hmac
 import base64
 import time
 import json
+import urllib.parse
 import requests
 import pandas as pd
 
@@ -54,9 +55,14 @@ def get_naver_data(api_key: str, secret_key: str, customer_id: str, start_date: 
         path = "/stats"
         since = str(start_date).replace("-", "")
         until = str(end_date).replace("-", "")
-        fields = json.dumps(["impCnt", "clkCnt", "ctr", "salesAmt", "rvsCnt", "convAmt"])
-        time_range = json.dumps({"since": since, "until": until})
-        query = f"ids={camp_id}&fields={fields}&timeRange={time_range}&timeUnit=day"
+        fields = json.dumps(["impCnt", "clkCnt", "ctr", "salesAmt", "rvsCnt", "convAmt"], separators=(',', ':'))
+        time_range = json.dumps({"since": since, "until": until}, separators=(',', ':'))
+        query = urllib.parse.urlencode({
+            "ids": camp_id,
+            "fields": fields,
+            "timeRange": time_range,
+            "timeUnit": "date",
+        })
         resp = requests.get(
             f"{BASE_URL}{path}?{query}",
             headers=_headers("GET", path, api_key, secret_key, customer_id),
