@@ -13,8 +13,7 @@ EMPTY_COLS = ["date", "campaign", "impressions", "clicks", "ctr", "spend", "conv
 
 def _sign(timestamp: str, method: str, path: str, secret_key: str) -> str:
     msg = f"{timestamp}.{method}.{path}"
-    raw_key = base64.b64decode(secret_key)
-    digest = _hmac.new(raw_key, msg.encode(), hashlib.sha256).digest()
+    digest = _hmac.new(secret_key.encode(), msg.encode(), hashlib.sha256).digest()
     return base64.b64encode(digest).decode()
 
 
