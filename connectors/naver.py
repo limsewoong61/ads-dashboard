@@ -13,7 +13,8 @@ EMPTY_COLS = ["date", "campaign", "impressions", "clicks", "ctr", "spend", "conv
 
 def _sign(timestamp: str, method: str, path: str, secret_key: str) -> str:
     msg = f"{timestamp}.{method}.{path}"
-    digest = _hmac.new(secret_key.encode(), msg.encode(), hashlib.sha256).digest()
+    raw_key = base64.b64decode(secret_key)
+    digest = _hmac.new(raw_key, msg.encode(), hashlib.sha256).digest()
     return base64.b64encode(digest).decode()
 
 
@@ -43,6 +44,11 @@ def get_naver_data(api_key: str, secret_key: str, customer_id: str, start_date: 
     if not campaigns:
         raise RuntimeError("NAVER 캠페인 목록이 비어있습니다. API 키와 Customer ID를 확인해주세요.")
 
+    since = str(start_date).replace("-", "")
+    until = str(end_date).replace("-", "")
+    fields = json.dumps(["impCnt", "clkCnt", "ctr", "salesAmt", "rvsCnt", "convAmt"], separators=(',', ':'))
+    time_range = json.dumps({"since": since, "until": until}, separators=(',', ':'))
+
     rows = []
     stat_errors = []
 
@@ -52,24 +58,20 @@ def get_naver_data(api_key: str, secret_key: str, customer_id: str, start_date: 
         if not camp_id:
             continue
 
-        path = "/stats"
-        since = str(start_date).replace("-", "")
-        until = str(end_date).replace("-", "")
-        fields = json.dumps(["impCnt", "clkCnt", "ctr", "salesAmt", "rvsCnt", "convAmt"], separators=(',', ':'))
-        time_range = json.dumps({"since": since, "until": until}, separators=(',', ':'))
+        stat_path = f"/ncc/campaigns/{camp_id}/stats"
         query = urllib.parse.urlencode({
-            "ids": camp_id,
             "fields": fields,
             "timeRange": time_range,
             "timeUnit": "date",
         })
+        full_url = f"{BASE_URL}{stat_path}?{query}"
         resp = requests.get(
-            f"{BASE_URL}{path}?{query}",
-            headers=_headers("GET", path, api_key, secret_key, customer_id),
+            full_url,
+            headers=_headers("GET", stat_path, api_key, secret_key, customer_id),
         )
 
         if not resp.ok:
-            stat_errors.append(f"{camp_name}: HTTP {resp.status_code} - {resp.text[:200]}")
+            stat_errors.append(f"{camp_name}: HTTP {resp.status_code} - {resp.text[:300]}")
             continue
 
         body = resp.json()
