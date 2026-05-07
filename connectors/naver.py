@@ -33,13 +33,18 @@ def get_naver_data(api_key: str, secret_key: str, customer_id: str, start_date: 
         BASE_URL + path,
         headers=_headers("GET", path, api_key, secret_key, customer_id),
     )
-    resp.raise_for_status()
+
+    if not resp.ok:
+        raise RuntimeError(f"NAVER 캠페인 조회 실패 (HTTP {resp.status_code}): {resp.text}")
+
     campaigns = resp.json()
 
     if not campaigns:
-        return pd.DataFrame(columns=EMPTY_COLS)
+        raise RuntimeError("NAVER 캠페인 목록이 비어있습니다. API 키와 Customer ID를 확인해주세요.")
 
     rows = []
+    stat_errors = []
+
     for camp in campaigns:
         camp_id = camp.get("nccCampaignId", "")
         camp_name = camp.get("name", "")
@@ -58,10 +63,15 @@ def get_naver_data(api_key: str, secret_key: str, customer_id: str, start_date: 
             headers=_headers("GET", path, api_key, secret_key, customer_id),
             params=params,
         )
+
         if not resp.ok:
+            stat_errors.append(f"{camp_name}: HTTP {resp.status_code} - {resp.text[:200]}")
             continue
 
-        for item in resp.json().get("data", []):
+        body = resp.json()
+        data = body if isinstance(body, list) else body.get("data", [])
+
+        for item in data:
             dt = item.get("dt", "")
             if len(dt) == 8:
                 dt = f"{dt[:4]}-{dt[4:6]}-{dt[6:]}"
@@ -79,4 +89,8 @@ def get_naver_data(api_key: str, secret_key: str, customer_id: str, start_date: 
                 "roas": conv_amt / spend if spend > 0 else 0.0,
             })
 
-    return pd.DataFrame(rows) if rows else pd.DataFrame(columns=EMPTY_COLS)
+    if not rows:
+        err_detail = (" | ".join(stat_errors[:3])) if stat_errors else "해당 기간 데이터 없음"
+        raise RuntimeError(f"NAVER 통계 데이터 없음: {err_detail}")
+
+    return pd.DataFrame(rows)
