@@ -1,7 +1,7 @@
 import pandas as pd
 from google.ads.googleads.client import GoogleAdsClient
 
-EMPTY_COLS = ["date", "campaign", "impressions", "clicks", "ctr", "spend", "conversions", "roas"]
+EMPTY_COLS = ["date", "campaign", "impressions", "clicks", "ctr", "spend", "conversions", "revenue", "roas"]
 
 
 def get_google_ads_data(customer_id, start_date, end_date, credentials):
@@ -39,6 +39,7 @@ def get_google_ads_data(customer_id, start_date, end_date, credentials):
             "ctr": row.metrics.ctr * 100,
             "spend": spend,
             "conversions": row.metrics.conversions,
+            "revenue": revenue,
             "roas": revenue / spend if spend > 0 else 0.0,
         })
 

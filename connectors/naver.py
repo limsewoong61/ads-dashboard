@@ -7,7 +7,7 @@ import requests
 import pandas as pd
 
 BASE_URL = "https://api.naver.com"
-EMPTY_COLS = ["date", "campaign", "impressions", "clicks", "ctr", "spend", "conversions", "roas"]
+EMPTY_COLS = ["date", "campaign", "impressions", "clicks", "ctr", "spend", "conversions", "revenue", "roas"]
 
 
 def _sign(timestamp: str, method: str, path: str, secret_key: str) -> str:
@@ -75,6 +75,7 @@ def get_naver_data(api_key: str, secret_key: str, customer_id: str, start_date: 
                 "ctr": float(item.get("ctr", 0)) * 100,
                 "spend": spend,
                 "conversions": int(item.get("rvsCnt", 0)),
+                "revenue": conv_amt,
                 "roas": conv_amt / spend if spend > 0 else 0.0,
             })
 

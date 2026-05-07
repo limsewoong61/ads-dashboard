@@ -156,16 +156,18 @@ total_impressions = combined["impressions"].sum()
 total_clicks = combined["clicks"].sum()
 total_spend = combined["spend"].sum()
 total_conversions = combined["conversions"].sum()
+total_revenue = combined["revenue"].sum()
 overall_ctr = (total_clicks / total_impressions * 100) if total_impressions > 0 else 0
-overall_roas = (combined["roas"] * combined["spend"]).sum() / total_spend if total_spend > 0 else 0
+overall_roas = total_revenue / total_spend if total_spend > 0 else 0
 
-c1, c2, c3, c4, c5, c6 = st.columns(6)
+c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
 c1.metric("💰 광고비", f"₩{total_spend:,.0f}")
 c2.metric("👁 노출수", f"{total_impressions:,.0f}")
 c3.metric("🖱 클릭수", f"{total_clicks:,.0f}")
 c4.metric("📊 CTR", f"{overall_ctr:.2f}%")
 c5.metric("🎯 전환수", f"{total_conversions:,.0f}")
-c6.metric("📈 ROAS", f"{overall_roas:.2f}x")
+c6.metric("💵 전환 매출액", f"₩{total_revenue:,.0f}")
+c7.metric("📈 ROAS", f"{overall_roas:.2f}x")
 
 st.divider()
 
@@ -179,11 +181,11 @@ channel_agg = (
          clicks=("clicks", "sum"),
          spend=("spend", "sum"),
          conversions=("conversions", "sum"),
-         weighted_roas=("roas", lambda x: (x * combined.loc[x.index, "spend"]).sum()))
+         revenue=("revenue", "sum"))
     .reset_index()
 )
 channel_agg["ctr"] = channel_agg["clicks"] / channel_agg["impressions"].replace(0, 1) * 100
-channel_agg["roas"] = channel_agg["weighted_roas"] / channel_agg["spend"].replace(0, 1)
+channel_agg["roas"] = channel_agg["revenue"] / channel_agg["spend"].replace(0, 1)
 
 def bar_chart(df, y, title, fmt="{:,.0f}", prefix="", suffix=""):
     labels = df[y].apply(lambda v: f"{prefix}{fmt.format(v)}{suffix}")
@@ -199,7 +201,7 @@ def bar_chart(df, y, title, fmt="{:,.0f}", prefix="", suffix=""):
     fig.update_yaxes(showgrid=True, gridcolor="#f0f0f0")
     return fig
 
-tabs = st.tabs(["💰 광고비", "👁 노출수", "🖱 클릭수", "📊 CTR", "🎯 전환수", "📈 ROAS"])
+tabs = st.tabs(["💰 광고비", "👁 노출수", "🖱 클릭수", "📊 CTR", "🎯 전환수", "💵 전환 매출액", "📈 ROAS"])
 with tabs[0]:
     st.plotly_chart(bar_chart(channel_agg, "spend", "채널별 광고비", "{:,.0f}", "₩"), use_container_width=True)
 with tabs[1]:
@@ -211,6 +213,8 @@ with tabs[3]:
 with tabs[4]:
     st.plotly_chart(bar_chart(channel_agg, "conversions", "채널별 전환수", "{:,.0f}"), use_container_width=True)
 with tabs[5]:
+    st.plotly_chart(bar_chart(channel_agg, "revenue", "채널별 전환 매출액", "{:,.0f}", "₩"), use_container_width=True)
+with tabs[6]:
     st.plotly_chart(bar_chart(channel_agg, "roas", "채널별 ROAS", "{:.2f}", suffix="x"), use_container_width=True)
 
 st.divider()
@@ -301,19 +305,20 @@ campaign_agg = (
          clicks=("clicks", "sum"),
          spend=("spend", "sum"),
          conversions=("conversions", "sum"),
-         weighted_roas=("roas", lambda x: (x * combined.loc[x.index, "spend"]).sum()))
+         revenue=("revenue", "sum"))
     .reset_index()
 )
 campaign_agg["ctr"] = campaign_agg["clicks"] / campaign_agg["impressions"].replace(0, 1) * 100
-campaign_agg["roas"] = campaign_agg["weighted_roas"] / campaign_agg["spend"].replace(0, 1)
-campaign_agg = campaign_agg.sort_values("spend", ascending=False).drop(columns="weighted_roas")
+campaign_agg["roas"] = campaign_agg["revenue"] / campaign_agg["spend"].replace(0, 1)
+campaign_agg = campaign_agg.sort_values("spend", ascending=False)
 
 display = campaign_agg.copy()
-display.columns = ["채널", "캠페인명", "노출수", "클릭수", "광고비(₩)", "전환수", "CTR(%)", "ROAS"]
+display.columns = ["채널", "캠페인명", "노출수", "클릭수", "광고비(₩)", "전환수", "전환매출액(₩)", "CTR(%)", "ROAS"]
 display["노출수"] = display["노출수"].apply(lambda x: f"{x:,.0f}")
 display["클릭수"] = display["클릭수"].apply(lambda x: f"{x:,.0f}")
 display["광고비(₩)"] = display["광고비(₩)"].apply(lambda x: f"₩{x:,.0f}")
 display["전환수"] = display["전환수"].apply(lambda x: f"{x:,.0f}")
+display["전환매출액(₩)"] = display["전환매출액(₩)"].apply(lambda x: f"₩{x:,.0f}")
 display["CTR(%)"] = display["CTR(%)"].apply(lambda x: f"{x:.2f}%")
 display["ROAS"] = display["ROAS"].apply(lambda x: f"{x:.2f}x")
 

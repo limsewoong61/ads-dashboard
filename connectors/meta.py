@@ -4,7 +4,7 @@ import pandas as pd
 
 GRAPH_VERSION = "v19.0"
 BASE_URL = f"https://graph.facebook.com/{GRAPH_VERSION}"
-EMPTY_COLS = ["date", "campaign", "impressions", "clicks", "ctr", "spend", "conversions", "roas"]
+EMPTY_COLS = ["date", "campaign", "impressions", "clicks", "ctr", "spend", "conversions", "revenue", "roas"]
 
 PURCHASE_TYPES = {
     "purchase",
@@ -55,6 +55,7 @@ def get_meta_data(app_id, app_secret, access_token, ad_account_id, start_date, e
                 "ctr": float(insight.get("ctr", 0)),
                 "spend": spend,
                 "conversions": conversions,
+                "revenue": revenue,
                 "roas": revenue / spend if spend > 0 else 0.0,
             })
 
