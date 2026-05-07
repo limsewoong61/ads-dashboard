@@ -54,7 +54,7 @@ def get_naver_data(api_key: str, secret_key: str, customer_id: str, start_date: 
         path = "/stats"
         params = {
             "ids": camp_id,
-            "fields": "impCnt,clkCnt,ctr,salesAmt,rvsCnt,convAmt",
+            "fields": json.dumps(["impCnt", "clkCnt", "ctr", "salesAmt", "rvsCnt", "convAmt"]),
             "timeRange": json.dumps({"since": str(start_date), "until": str(end_date)}),
             "timeUnit": "day",
         }
