@@ -52,16 +52,14 @@ def get_naver_data(api_key: str, secret_key: str, customer_id: str, start_date: 
             continue
 
         path = "/stats"
-        params = {
-            "ids": camp_id,
-            "fields": json.dumps(["impCnt", "clkCnt", "ctr", "salesAmt", "rvsCnt", "convAmt"]),
-            "timeRange": json.dumps({"since": str(start_date), "until": str(end_date)}),
-            "timeUnit": "day",
-        }
+        since = str(start_date).replace("-", "")
+        until = str(end_date).replace("-", "")
+        fields = json.dumps(["impCnt", "clkCnt", "ctr", "salesAmt", "rvsCnt", "convAmt"])
+        time_range = json.dumps({"since": since, "until": until})
+        query = f"ids={camp_id}&fields={fields}&timeRange={time_range}&timeUnit=day"
         resp = requests.get(
-            BASE_URL + path,
+            f"{BASE_URL}{path}?{query}",
             headers=_headers("GET", path, api_key, secret_key, customer_id),
-            params=params,
         )
 
         if not resp.ok:
