@@ -13,7 +13,23 @@ PURCHASE_TYPES = {
 }
 
 
+def _extend_token(app_id: str, app_secret: str, access_token: str) -> str:
+    resp = requests.get(
+        f"{BASE_URL}/oauth/access_token",
+        params={
+            "grant_type": "fb_exchange_token",
+            "client_id": app_id,
+            "client_secret": app_secret,
+            "fb_exchange_token": access_token,
+        },
+    )
+    if resp.ok:
+        return resp.json().get("access_token", access_token)
+    return access_token
+
+
 def get_meta_data(app_id, app_secret, access_token, ad_account_id, start_date, end_date):
+    access_token = _extend_token(app_id, app_secret, access_token)
     url = f"{BASE_URL}/{ad_account_id}/insights"
     params = {
         "access_token": access_token,
