@@ -514,24 +514,60 @@ if forecast_data:
             )
 
         if total_roas_val > 0:
-            # 현재 ROAS vs 목표 ROAS
+            # 현재 ROAS vs 목표 ROAS 상태
             if total_roas_val >= target_roas:
                 st.success(f"✅ 현재 ROAS **{total_roas_val:.2f}x**로 목표 **{target_roas:.1f}x**를 이미 달성했습니다!")
             else:
-                st.warning(f"⚠️ 현재 ROAS **{total_roas_val:.2f}x** — 목표 **{target_roas:.1f}x** 미달성 (현재 효율 기준 {target_roas/total_roas_val:.1f}배 개선 필요)")
+                st.warning(f"⚠️ 현재 ROAS **{total_roas_val:.2f}x** — 목표 **{target_roas:.1f}x** 미달성 (효율 **{target_roas/total_roas_val:.1f}배** 개선 필요)")
 
-            # 목표 매출액 달성을 위한 필요 예산
             if target_revenue_goal > 0 and target_roas > 0:
-                needed_spend = target_revenue_goal / target_roas
-                delta = needed_spend - total_spend
+                # 시나리오 A: 목표 ROAS 달성 가정
+                spend_a = target_revenue_goal / target_roas
+                delta_a = spend_a - total_spend
+
+                # 시나리오 B: 현재 효율 유지 가정
+                spend_b = target_revenue_goal / total_roas_val  # 목표 매출 달성에 필요한 실제 예산
+                rev_b = spend_a * total_roas_val                # 시나리오A 예산을 현재 효율로 집행 시 실제 매출
+
+                def _sign_color(v):
+                    return "#f75a5a" if v > 0 else "#3ddc84"
+                def _sign_str(v):
+                    return f"+₩{v:,.0f}" if v > 0 else f"-₩{abs(v):,.0f}"
+
                 st.markdown(f"""
-<div style='background:#1e2535;border:1px solid #2a3450;border-radius:10px;padding:16px 20px;margin-top:8px'>
-<div style='color:#8899bb;font-size:12px;margin-bottom:10px'>목표 매출액 <b style='color:#e0e6f0'>₩{target_revenue_goal:,.0f}</b> / 목표 ROAS <b style='color:#e0e6f0'>{target_roas:.1f}x</b> 달성 시나리오</div>
-<div style='display:flex;gap:32px;flex-wrap:wrap'>
-  <div><div style='color:#8899bb;font-size:11px'>필요 광고 예산</div><div style='color:#4f8ef7;font-size:22px;font-weight:700'>₩{needed_spend:,.0f}</div></div>
-  <div><div style='color:#8899bb;font-size:11px'>현재 대비</div><div style='color:{"#f75a5a" if delta > 0 else "#3ddc84"};font-size:22px;font-weight:700'>{"+" if delta > 0 else ""}₩{delta:,.0f}</div></div>
-  <div><div style='color:#8899bb;font-size:11px'>현재 광고비</div><div style='color:#c0d0f0;font-size:22px;font-weight:700'>₩{total_spend:,.0f}</div></div>
-</div>
+<div style='margin-top:12px'>
+  <!-- 시나리오 A -->
+  <div style='background:#1a2640;border:1px solid #2e4a7a;border-radius:10px;padding:16px 20px;margin-bottom:10px'>
+    <div style='color:#4f8ef7;font-size:12px;font-weight:700;margin-bottom:10px'>
+      📘 시나리오 A &nbsp;—&nbsp; 효율을 목표 ROAS {target_roas:.1f}x로 개선했을 때
+    </div>
+    <div style='color:#8899bb;font-size:11px;margin-bottom:10px'>
+      목표 매출 ₩{target_revenue_goal:,.0f} 달성 시 필요 예산 = ₩{target_revenue_goal:,.0f} ÷ {target_roas:.1f}x
+    </div>
+    <div style='display:flex;gap:32px;flex-wrap:wrap'>
+      <div><div style='color:#8899bb;font-size:11px'>필요 광고 예산</div><div style='color:#4f8ef7;font-size:22px;font-weight:700'>₩{spend_a:,.0f}</div></div>
+      <div><div style='color:#8899bb;font-size:11px'>현재 대비</div><div style='color:{_sign_color(delta_a)};font-size:22px;font-weight:700'>{_sign_str(delta_a)}</div></div>
+      <div><div style='color:#8899bb;font-size:11px'>현재 광고비</div><div style='color:#c0d0f0;font-size:22px;font-weight:700'>₩{total_spend:,.0f}</div></div>
+    </div>
+  </div>
+  <!-- 시나리오 B -->
+  <div style='background:#1e1e2e;border:1px solid #3a2a4a;border-radius:10px;padding:16px 20px'>
+    <div style='color:#b066ff;font-size:12px;font-weight:700;margin-bottom:10px'>
+      📙 시나리오 B &nbsp;—&nbsp; 현재 효율({total_roas_val:.2f}x) 그대로 유지할 때
+    </div>
+    <div style='display:flex;gap:32px;flex-wrap:wrap'>
+      <div>
+        <div style='color:#8899bb;font-size:11px'>목표 매출 달성에 필요한 예산</div>
+        <div style='color:#b066ff;font-size:22px;font-weight:700'>₩{spend_b:,.0f}</div>
+        <div style='color:#5a6a8a;font-size:11px'>₩{target_revenue_goal:,.0f} ÷ {total_roas_val:.2f}x</div>
+      </div>
+      <div>
+        <div style='color:#8899bb;font-size:11px'>A안 예산(₩{spend_a:,.0f}) 집행 시 실제 예상 매출</div>
+        <div style='color:#f7a05a;font-size:22px;font-weight:700'>₩{rev_b:,.0f}</div>
+        <div style='color:#5a6a8a;font-size:11px'>목표 대비 ₩{target_revenue_goal - rev_b:,.0f} 부족</div>
+      </div>
+    </div>
+  </div>
 </div>
 """, unsafe_allow_html=True)
         else:
