@@ -180,29 +180,60 @@ c7.metric("📈 ROAS", f"{overall_roas:.2f}x")
 # ── 채널별 개별 요약 ───────────────────────────────────────────────────────────
 
 st.subheader("채널별 개별 요약")
-ch_cols = st.columns(len(active_data))
 
-for i, (ch, df) in enumerate(active_data.items()):
-    color = CHANNEL_COLORS.get(ch, "#888")
-    imp = df["impressions"].sum()
-    clk = df["clicks"].sum()
+# 채널별 데이터 수집
+_ch_stats = {}
+for ch, df in active_data.items():
     spd = df["spend"].sum()
+    clk = df["clicks"].sum()
+    imp = df["impressions"].sum()
     conv = df["conversions"].sum()
     rev = df["revenue"].sum()
-    ctr_ch = (clk / imp * 100) if imp > 0 else 0
-    roas_ch = rev / spd if spd > 0 else 0
-    cpc_ch = spd / clk if clk > 0 else 0
+    _ch_stats[ch] = dict(
+        spd=spd, clk=clk, imp=imp, conv=conv, rev=rev,
+        ctr=(clk / imp * 100) if imp > 0 else 0,
+        cpc=spd / clk if clk > 0 else 0,
+        roas=rev / spd if spd > 0 else 0,
+    )
 
-    with ch_cols[i]:
-        st.markdown(f"<div class='channel-header' style='border-color:{color}; color:{color}'>{ch}</div>", unsafe_allow_html=True)
-        st.metric("광고비", f"₩{spd:,.0f}")
-        st.metric("노출수", f"{imp:,.0f}")
-        st.metric("클릭수", f"{clk:,.0f}")
-        st.metric("CTR", f"{ctr_ch:.2f}%")
-        st.metric("CPC", f"₩{cpc_ch:,.0f}")
-        st.metric("전환수", f"{conv:,.0f}")
-        st.metric("전환매출액", f"₩{rev:,.0f}")
-        st.metric("ROAS", f"{roas_ch:.2f}x")
+_chs = list(_ch_stats.keys())
+
+# 헤더 행 (채널명 + 색상)
+_header_cells = "<th style='text-align:left;padding:10px 14px;font-size:13px;color:#888;font-weight:600;border-bottom:1px solid #ddd;'>지표</th>"
+for ch in _chs:
+    c = CHANNEL_COLORS.get(ch, "#888")
+    _header_cells += f"<th style='text-align:right;padding:10px 14px;font-size:15px;font-weight:700;color:{c};border-bottom:3px solid {c};'>{ch}</th>"
+
+# 지표 행 데이터
+_rows_def = [
+    ("💰 광고비",    lambda s: f"₩{s['spd']:,.0f}"),
+    ("👁 노출수",    lambda s: f"{s['imp']:,.0f}"),
+    ("🖱 클릭수",    lambda s: f"{s['clk']:,.0f}"),
+    ("📊 CTR",      lambda s: f"{s['ctr']:.2f}%"),
+    ("💡 CPC",      lambda s: f"₩{s['cpc']:,.0f}"),
+    ("🎯 전환수",    lambda s: f"{s['conv']:,.0f}"),
+    ("💵 전환매출액", lambda s: f"₩{s['rev']:,.0f}"),
+    ("📈 ROAS",     lambda s: f"{s['roas']:.2f}x"),
+]
+
+_body_rows = ""
+for idx, (label, fn) in enumerate(_rows_def):
+    bg = "rgba(0,0,0,0.03)" if idx % 2 == 0 else "transparent"
+    _body_rows += f"<tr style='background:{bg}'>"
+    _body_rows += f"<td style='padding:10px 14px;font-weight:500;font-size:13px;color:#666;white-space:nowrap'>{label}</td>"
+    for ch in _chs:
+        _body_rows += f"<td style='text-align:right;padding:10px 14px;font-weight:600;font-size:14px;'>{fn(_ch_stats[ch])}</td>"
+    _body_rows += "</tr>"
+
+st.markdown(f"""
+<div style='overflow-x:auto;border:1px solid #e0e7ff;border-radius:12px;'>
+<table style='width:100%;border-collapse:collapse;'>
+  <thead><tr>{_header_cells}</tr></thead>
+  <tbody>{_body_rows}</tbody>
+</table>
+</div>
+""", unsafe_allow_html=True)
+st.markdown("<br>", unsafe_allow_html=True)
 
 st.divider()
 
