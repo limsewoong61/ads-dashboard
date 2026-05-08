@@ -572,6 +572,97 @@ if forecast_data:
 """, unsafe_allow_html=True)
         else:
             st.info("전환 매출 데이터가 없어 ROAS 기반 예측이 어렵습니다. (META·NAVER 전환 추적 연동 필요)")
+
+    # ── 채널별 예산 재배분 시뮬레이터 ────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("**채널별 예산 재배분 시뮬레이터**")
+    st.caption(f"현재 총 예산 ₩{total_spend:,.0f} 기준 · 채널 배분을 바꿔 전체 ROAS 변화를 확인하세요")
+
+    _ch_roas  = {d["channel"]: d["roas"]  for d in forecast_data}
+    _ch_spend = {d["channel"]: d["spend"] for d in forecast_data}
+    _all_chs  = [d["channel"] for d in forecast_data]
+
+    if any(v == 0 for v in _ch_roas.values()):
+        zero_chs = [ch for ch, v in _ch_roas.items() if v == 0]
+        st.caption(f"⚠️ {', '.join(zero_chs)} — 전환 추적 미연동으로 ROAS 0x · 해당 채널 예산은 매출 기여 0으로 계산됩니다")
+
+    _rcols = st.columns(len(_all_chs))
+    _new_budgets = {}
+    for _i, _ch in enumerate(_all_chs):
+        with _rcols[_i]:
+            _color = CHANNEL_COLORS.get(_ch, "#888")
+            _rc = _ch_roas[_ch]
+            _rc_color = "#3ddc84" if _rc >= 1.0 else ("#f7a05a" if _rc >= 0.5 else "#f75a5a")
+            st.markdown(f"""
+<div style='background:#1e2535;border:1px solid #2a3450;border-radius:10px;padding:14px 16px;margin-bottom:8px'>
+  <div style='color:{_color};font-size:15px;font-weight:700'>{_ch}</div>
+  <div style='display:flex;justify-content:space-between;margin-top:8px'>
+    <div><div style='color:#8899bb;font-size:11px'>현재 예산</div>
+         <div style='color:#c0d0f0;font-size:14px;font-weight:600'>₩{_ch_spend[_ch]:,.0f}</div></div>
+    <div style='text-align:right'><div style='color:#8899bb;font-size:11px'>현재 ROAS</div>
+         <div style='color:{_rc_color};font-size:14px;font-weight:700'>{_rc:.2f}x</div></div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+            _new_budgets[_ch] = st.number_input(
+                f"새 예산 (₩)",
+                min_value=0,
+                value=int(_ch_spend[_ch]),
+                step=500_000,
+                key=f"realloc_{_ch}",
+            )
+            _proj_ch_rev = _new_budgets[_ch] * _rc
+            _delta_ch = _new_budgets[_ch] - _ch_spend[_ch]
+            _dcolor = "#f75a5a" if _delta_ch > 0 else "#3ddc84" if _delta_ch < 0 else "#8899bb"
+            st.caption(
+                f"예상 매출 ₩{_proj_ch_rev:,.0f} &nbsp;|&nbsp; "
+                f"<span style='color:{_dcolor}'>{'▲' if _delta_ch>0 else '▼' if _delta_ch<0 else '─'}"
+                f"₩{abs(_delta_ch):,.0f}</span>",
+                unsafe_allow_html=True,
+            )
+
+    _total_new   = sum(_new_budgets.values())
+    _proj_rev    = sum(_new_budgets[ch] * _ch_roas[ch] for ch in _all_chs)
+    _proj_roas   = _proj_rev / _total_new if _total_new > 0 else 0
+    _delta_roas  = _proj_roas - total_roas_val
+    _delta_bud   = _total_new - total_spend
+    _rr_color    = "#3ddc84" if _delta_roas > 0.005 else ("#f75a5a" if _delta_roas < -0.005 else "#c0d0f0")
+    _bd_color    = "#f75a5a" if _delta_bud > 0 else "#3ddc84" if _delta_bud < 0 else "#8899bb"
+    _arrow       = "▲" if _delta_roas > 0.005 else ("▼" if _delta_roas < -0.005 else "─")
+    _label       = "개선" if _delta_roas > 0.005 else ("하락" if _delta_roas < -0.005 else "동일")
+
+    st.markdown(f"""
+<div style='background:linear-gradient(135deg,#1a2640,#1e2535);border:1px solid #3a5080;
+     border-radius:12px;padding:20px 24px;margin-top:4px'>
+  <div style='color:#8899bb;font-size:12px;font-weight:600;margin-bottom:14px;letter-spacing:0.05em'>
+    재배분 후 예상 결과
+  </div>
+  <div style='display:flex;gap:40px;flex-wrap:wrap;align-items:center'>
+    <div>
+      <div style='color:#8899bb;font-size:11px'>현재 전체 ROAS</div>
+      <div style='color:#c0d0f0;font-size:28px;font-weight:700'>{total_roas_val:.2f}x</div>
+      <div style='color:#5a6a8a;font-size:11px'>매출 ₩{total_revenue:,.0f}</div>
+    </div>
+    <div style='color:#4f8ef7;font-size:28px'>→</div>
+    <div>
+      <div style='color:#8899bb;font-size:11px'>재배분 후 예상 ROAS</div>
+      <div style='color:{_rr_color};font-size:28px;font-weight:700'>{_proj_roas:.2f}x</div>
+      <div style='color:{_rr_color};font-size:12px'>{_arrow} {abs(_delta_roas):.2f}x {_label}</div>
+    </div>
+    <div>
+      <div style='color:#8899bb;font-size:11px'>예상 매출</div>
+      <div style='color:#c0d0f0;font-size:28px;font-weight:700'>₩{_proj_rev:,.0f}</div>
+      <div style='color:#5a6a8a;font-size:11px'>현재 대비 {"+" if _proj_rev-total_revenue>=0 else ""}₩{_proj_rev-total_revenue:,.0f}</div>
+    </div>
+    <div style='margin-left:auto;text-align:right'>
+      <div style='color:#8899bb;font-size:11px'>총 예산</div>
+      <div style='color:{_bd_color};font-size:20px;font-weight:700'>₩{_total_new:,.0f}</div>
+      <div style='color:{_bd_color};font-size:11px'>{"+" if _delta_bud>=0 else ""}₩{_delta_bud:,.0f} vs 현재</div>
+    </div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
 else:
     st.info("예측 분석을 위한 광고비 데이터가 없습니다.")
 
