@@ -72,10 +72,12 @@ def get_naver_data(api_key: str, secret_key: str, customer_id: str, start_date: 
         data = body if isinstance(body, list) else body.get("data", [])
 
         for item in data:
-            dt = item.get("dt", "")
-            if len(dt) != 8:
-                continue
-            dt = f"{dt[:4]}-{dt[4:6]}-{dt[6:]}"
+            raw_dt = item.get("dt", "")
+            if len(raw_dt) == 8:
+                dt = f"{raw_dt[:4]}-{raw_dt[4:6]}-{raw_dt[6:]}"
+            else:
+                # API가 집계 행만 반환할 때 기간 시작일을 날짜로 사용
+                dt = str(start_date)
             spend = float(item.get("salesAmt", 0))
             clicks = int(item.get("clkCnt", 0))
             impressions = int(item.get("impCnt", 0))
