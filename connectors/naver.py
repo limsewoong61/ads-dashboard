@@ -45,7 +45,7 @@ def get_naver_data(api_key: str, secret_key: str, customer_id: str, start_date: 
 
     since = str(start_date).replace("-", "")
     until = str(end_date).replace("-", "")
-    fields = json.dumps(["impCnt", "clkCnt", "ctr", "salesAmt", "rvsCnt"], separators=(',', ':'))
+    fields = json.dumps(["impCnt", "clkCnt", "salesAmt"], separators=(',', ':'))
     time_range = json.dumps({"since": since, "until": until}, separators=(',', ':'))
 
     rows = []
@@ -78,15 +78,14 @@ def get_naver_data(api_key: str, secret_key: str, customer_id: str, start_date: 
             spend = float(item.get("salesAmt", 0))
             clicks = int(item.get("clkCnt", 0))
             impressions = int(item.get("impCnt", 0))
-            ctr = float(item.get("ctr", 0)) * 100
             rows.append({
                 "date": dt,
                 "campaign": camp_name,
                 "impressions": impressions,
                 "clicks": clicks,
-                "ctr": ctr if ctr > 0 else ((clicks / impressions * 100) if impressions > 0 else 0.0),
+                "ctr": (clicks / impressions * 100) if impressions > 0 else 0.0,
                 "spend": spend,
-                "conversions": int(item.get("rvsCnt", 0)),
+                "conversions": 0,
                 "revenue": 0.0,
                 "roas": 0.0,
             })
