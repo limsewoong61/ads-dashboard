@@ -713,6 +713,137 @@ display["ROAS"] = display["ROAS"].apply(lambda x: f"{x:.2f}x")
 
 st.dataframe(display, use_container_width=True, hide_index=True, height=400)
 
+# ── Campaign Diagnosis ────────────────────────────────────────────────────────
+
+st.divider()
+st.subheader("🔍 캠페인 진단 & 개선 의견")
+
+def _diagnose(row):
+    """캠페인 1개에 대한 진단 메시지 리스트 반환"""
+    ch      = row["channel"]
+    roas    = row["roas"]
+    ctr     = row["ctr"]
+    cpc     = row["cpc"]
+    spend   = row["spend"]
+    conv    = row["conversions"]
+    rev     = row["revenue"]
+    imp     = row["impressions"]
+    clk     = row["clicks"]
+    has_conv = ch != "NAVER"  # NAVER는 전환 미측정
+
+    good, bad = [], []
+
+    if has_conv:
+        if roas >= 2.0:
+            good.append(f"ROAS {roas:.2f}x — 광고비 대비 매출 우수, 예산 확대 검토 가능")
+        elif roas >= 1.0:
+            good.append(f"ROAS {roas:.2f}x — 흑자 운영 중")
+        elif spend > 0:
+            bad.append(f"ROAS {roas:.2f}x — 광고비 대비 매출 부족 (₩{spend:,.0f} 집행 → ₩{rev:,.0f} 매출)")
+
+        if conv > 0:
+            cvr = conv / clk * 100 if clk > 0 else 0
+            if cvr >= 5:
+                good.append(f"전환율 {cvr:.1f}% — 랜딩페이지 반응 매우 우수")
+            elif cvr >= 2:
+                good.append(f"전환율 {cvr:.1f}% — 양호한 수준")
+            else:
+                bad.append(f"전환율 {cvr:.1f}% — 클릭 후 구매 전환이 낮음, 랜딩페이지 점검 필요")
+        elif spend > 0:
+            bad.append("전환 0건 — 클릭은 발생하지만 구매 미발생, 소재·타겟·랜딩페이지 점검 필요")
+
+    if ch == "META":
+        if ctr >= 2.5:
+            good.append(f"CTR {ctr:.2f}% — 광고 소재 반응 우수")
+        elif ctr >= 1.5:
+            good.append(f"CTR {ctr:.2f}% — 소재 반응 양호")
+        else:
+            bad.append(f"CTR {ctr:.2f}% — 소재 반응 낮음, 크리에이티브 교체 검토")
+    elif ch == "Google Ads":
+        if ctr >= 5:
+            good.append(f"CTR {ctr:.2f}% — 검색 키워드 관련성 우수")
+        elif ctr >= 2:
+            good.append(f"CTR {ctr:.2f}% — 검색 CTR 양호")
+        else:
+            bad.append(f"CTR {ctr:.2f}% — 검색 CTR 낮음, 광고 문구·키워드 매칭 점검 필요")
+    elif ch == "NAVER":
+        if ctr >= 5:
+            good.append(f"CTR {ctr:.2f}% — 브랜드 검색 반응 매우 우수")
+        elif ctr >= 1:
+            good.append(f"CTR {ctr:.2f}% — CTR 양호")
+        else:
+            bad.append(f"CTR {ctr:.2f}% — 노출 대비 클릭 낮음, 광고 문구 개선 필요")
+
+        if spend == 0 and clk > 0:
+            good.append(f"광고비 없이 클릭 {clk:,}건 — 브랜드 자연유입 발생 중")
+
+    return good, bad
+
+# 채널별 기준 ROAS (전환 있는 채널만)
+_tracked_camp = campaign_agg[campaign_agg["channel"] != "NAVER"]
+_avg_roas = _tracked_camp["roas"].mean() if not _tracked_camp.empty else 1.0
+
+top_camps  = campaign_agg[
+    (campaign_agg["channel"] != "NAVER") & (campaign_agg["roas"] >= 1.5)
+].sort_values("roas", ascending=False)
+mid_camps  = campaign_agg[
+    (campaign_agg["channel"] != "NAVER") & (campaign_agg["roas"] > 0) & (campaign_agg["roas"] < 1.5)
+].sort_values("roas", ascending=False)
+low_camps  = campaign_agg[
+    (campaign_agg["channel"] != "NAVER") & (campaign_agg["spend"] > 0) & (campaign_agg["roas"] == 0)
+]
+naver_camps = campaign_agg[campaign_agg["channel"] == "NAVER"]
+
+def _card(row, border_color, label_color, label):
+    good, bad = _diagnose(row)
+    good_html = "".join(f"<li style='margin:3px 0'>✅ {g}</li>" for g in good)
+    bad_html  = "".join(f"<li style='margin:3px 0'>⚠️ {b}</li>" for b in bad)
+    ch_color  = CHANNEL_COLORS.get(row["channel"], "#888")
+    return f"""
+<div style='background:#161b27;border:1px solid {border_color};border-left:4px solid {border_color};
+     border-radius:10px;padding:14px 18px;margin-bottom:10px'>
+  <div style='display:flex;align-items:center;gap:10px;margin-bottom:8px'>
+    <span style='color:{ch_color};font-weight:700;font-size:13px'>{row["channel"]}</span>
+    <span style='color:#c0d0f0;font-weight:600;font-size:14px'>{row["campaign"]}</span>
+    <span style='background:{border_color}22;color:{label_color};font-size:10px;font-weight:700;
+          padding:2px 8px;border-radius:10px;margin-left:auto'>{label}</span>
+  </div>
+  <div style='display:flex;gap:20px;font-size:11px;color:#8899bb;margin-bottom:8px'>
+    <span>광고비 ₩{row["spend"]:,.0f}</span>
+    {'<span>ROAS <b style="color:#c0d0f0">%.2fx</b></span>' % row["roas"] if row["channel"] != "NAVER" else '<span>전환 미측정</span>'}
+    <span>CTR {row["ctr"]:.2f}%</span>
+    <span>CPC ₩{row["cpc"]:,.0f}</span>
+    {'<span>전환 <b style="color:#c0d0f0">%d건</b></span>' % row["conversions"] if row["channel"] != "NAVER" else ''}
+  </div>
+  <ul style='margin:4px 0 0 16px;padding:0;font-size:12px;color:#c0d0f0;line-height:1.8'>
+    {good_html}{bad_html}
+  </ul>
+</div>"""
+
+_diag_html = ""
+
+if not top_camps.empty:
+    _diag_html += "<div style='color:#3ddc84;font-size:12px;font-weight:700;margin:12px 0 6px'>🟢 잘 운영 중인 캠페인</div>"
+    for _, r in top_camps.iterrows():
+        _diag_html += _card(r, "#2a5a3a", "#3ddc84", f"ROAS {r['roas']:.2f}x")
+
+if not mid_camps.empty:
+    _diag_html += "<div style='color:#f7a05a;font-size:12px;font-weight:700;margin:12px 0 6px'>🟡 개선 여지 있는 캠페인</div>"
+    for _, r in mid_camps.iterrows():
+        _diag_html += _card(r, "#4a3a10", "#f7a05a", f"ROAS {r['roas']:.2f}x")
+
+if not low_camps.empty:
+    _diag_html += "<div style='color:#f75a5a;font-size:12px;font-weight:700;margin:12px 0 6px'>🔴 전환 미발생 캠페인</div>"
+    for _, r in low_camps.iterrows():
+        _diag_html += _card(r, "#5a2020", "#f75a5a", "전환 없음")
+
+if not naver_camps.empty:
+    _diag_html += "<div style='color:#8899bb;font-size:12px;font-weight:700;margin:12px 0 6px'>⬜ NAVER (전환 미측정)</div>"
+    for _, r in naver_camps.iterrows():
+        _diag_html += _card(r, "#2a3450", "#8899bb", "전환 미측정")
+
+st.markdown(_diag_html, unsafe_allow_html=True)
+
 # ── Footer ─────────────────────────────────────────────────────────────────────
 
 st.caption(
