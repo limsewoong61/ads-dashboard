@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
+import numpy as np
 
 from connectors.meta import get_meta_data
 from connectors.google_ads import get_google_ads_data
@@ -29,6 +30,13 @@ st.markdown("""
     border-radius: 12px;
     font-size: 13px;
     font-weight: 600;
+}
+.channel-header {
+    font-size: 16px;
+    font-weight: 700;
+    padding: 8px 0 4px 0;
+    border-bottom: 3px solid;
+    margin-bottom: 12px;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -169,6 +177,33 @@ c5.metric("🎯 전환수", f"{total_conversions:,.0f}")
 c6.metric("💵 전환 매출액", f"₩{total_revenue:,.0f}")
 c7.metric("📈 ROAS", f"{overall_roas:.2f}x")
 
+# ── 채널별 개별 요약 ───────────────────────────────────────────────────────────
+
+st.subheader("채널별 개별 요약")
+ch_cols = st.columns(len(active_data))
+
+for i, (ch, df) in enumerate(active_data.items()):
+    color = CHANNEL_COLORS.get(ch, "#888")
+    imp = df["impressions"].sum()
+    clk = df["clicks"].sum()
+    spd = df["spend"].sum()
+    conv = df["conversions"].sum()
+    rev = df["revenue"].sum()
+    ctr_ch = (clk / imp * 100) if imp > 0 else 0
+    roas_ch = rev / spd if spd > 0 else 0
+    cpc_ch = spd / clk if clk > 0 else 0
+
+    with ch_cols[i]:
+        st.markdown(f"<div class='channel-header' style='border-color:{color}; color:{color}'>{ch}</div>", unsafe_allow_html=True)
+        st.metric("광고비", f"₩{spd:,.0f}")
+        st.metric("노출수", f"{imp:,.0f}")
+        st.metric("클릭수", f"{clk:,.0f}")
+        st.metric("CTR", f"{ctr_ch:.2f}%")
+        st.metric("CPC", f"₩{cpc_ch:,.0f}")
+        st.metric("전환수", f"{conv:,.0f}")
+        st.metric("전환매출액", f"₩{rev:,.0f}")
+        st.metric("ROAS", f"{roas_ch:.2f}x")
+
 st.divider()
 
 # ── Channel Comparison ────────────────────────────────────────────────────────
@@ -219,9 +254,9 @@ with tabs[6]:
 
 st.divider()
 
-# ── Daily Trend ───────────────────────────────────────────────────────────────
+# ── Daily / Weekly Trend ──────────────────────────────────────────────────────
 
-st.subheader("일별 트렌드")
+st.subheader("트렌드 분석")
 
 METRIC_MAP = {
     "광고비 (₩)": "spend",
@@ -231,22 +266,40 @@ METRIC_MAP = {
     "CTR (%)": "ctr",
 }
 
-col_left, col_right = st.columns([3, 1])
-with col_right:
+col_left, col_mid, col_right = st.columns([2, 1, 1])
+with col_mid:
     selected_label = st.selectbox("지표", list(METRIC_MAP.keys()))
+with col_right:
+    view_unit = st.radio("집계 단위", ["일별", "주별"], horizontal=True)
+
 y_col = METRIC_MAP[selected_label]
 
-daily = (
-    combined.groupby(["date", "channel"])
-    .agg({y_col: "sum"})
-    .reset_index()
-    .sort_values("date")
-)
+combined["date_dt"] = pd.to_datetime(combined["date"])
+
+if view_unit == "일별":
+    trend = (
+        combined.groupby(["date", "channel"])
+        .agg({y_col: "sum"})
+        .reset_index()
+        .sort_values("date")
+    )
+    x_col = "date"
+    title_suffix = "일별"
+else:
+    combined["week_start"] = combined["date_dt"].dt.to_period("W").apply(lambda r: str(r.start_time.date()))
+    trend = (
+        combined.groupby(["week_start", "channel"])
+        .agg({y_col: "sum"})
+        .reset_index()
+        .sort_values("week_start")
+    )
+    x_col = "week_start"
+    title_suffix = "주별"
 
 fig_trend = px.line(
-    daily, x="date", y=y_col, color="channel",
+    trend, x=x_col, y=y_col, color="channel",
     color_discrete_map=CHANNEL_COLORS,
-    title=f"일별 {selected_label} 추이",
+    title=f"{title_suffix} {selected_label} 추이",
     markers=True,
 )
 fig_trend.update_layout(
@@ -257,6 +310,105 @@ fig_trend.update_layout(
 fig_trend.update_yaxes(showgrid=True, gridcolor="#f0f0f0")
 fig_trend.update_xaxes(showgrid=False)
 st.plotly_chart(fig_trend, use_container_width=True)
+
+st.divider()
+
+# ── Budget Forecast ────────────────────────────────────────────────────────────
+
+st.subheader("📈 예산 예측 분석")
+
+days_in_period = max((end_date - start_date).days, 1)
+
+# 채널별 효율 지표 계산
+forecast_data = []
+for ch, df in active_data.items():
+    spd = df["spend"].sum()
+    clk = df["clicks"].sum()
+    imp = df["impressions"].sum()
+    conv = df["conversions"].sum()
+    rev = df["revenue"].sum()
+    if spd > 0:
+        forecast_data.append({
+            "channel": ch,
+            "spend": spd,
+            "daily_spend": spd / days_in_period,
+            "cpc": spd / clk if clk > 0 else 0,
+            "cpm": spd / imp * 1000 if imp > 0 else 0,
+            "conv_rate": conv / clk if clk > 0 else 0,
+            "roas": rev / spd,
+        })
+
+if forecast_data:
+    col_f1, col_f2 = st.columns([1, 2])
+
+    with col_f1:
+        st.markdown("**채널별 효율 지표**")
+        eff_df = pd.DataFrame(forecast_data)[["channel", "daily_spend", "cpc", "cpm", "conv_rate", "roas"]]
+        eff_df.columns = ["채널", "일평균광고비(₩)", "CPC(₩)", "CPM(₩)", "전환율(%)", "ROAS"]
+        eff_df["일평균광고비(₩)"] = eff_df["일평균광고비(₩)"].apply(lambda x: f"₩{x:,.0f}")
+        eff_df["CPC(₩)"] = eff_df["CPC(₩)"].apply(lambda x: f"₩{x:,.0f}")
+        eff_df["CPM(₩)"] = eff_df["CPM(₩)"].apply(lambda x: f"₩{x:,.0f}")
+        eff_df["전환율(%)"] = eff_df["전환율(%)"].apply(lambda x: f"{x*100:.2f}%")
+        eff_df["ROAS"] = eff_df["ROAS"].apply(lambda x: f"{x:.2f}x")
+        st.dataframe(eff_df, hide_index=True, use_container_width=True)
+
+    with col_f2:
+        st.markdown("**추가 예산 투입 시 예상 성과**")
+
+        # 슬라이더로 추가 예산 입력
+        max_budget = int(total_spend * 2) if total_spend > 0 else 10_000_000
+        add_budget = st.slider(
+            "추가 예산 (₩)",
+            min_value=100_000,
+            max_value=max(max_budget, 10_000_000),
+            value=min(1_000_000, max_budget),
+            step=100_000,
+            format="₩%d",
+        )
+
+        # 현재 효율 기반 예측
+        total_cpc = total_spend / total_clicks if total_clicks > 0 else 0
+        total_conv_rate = total_conversions / total_clicks if total_clicks > 0 else 0
+        total_roas_val = total_revenue / total_spend if total_spend > 0 else 0
+
+        proj_clicks = int(add_budget / total_cpc) if total_cpc > 0 else 0
+        proj_conv = int(proj_clicks * total_conv_rate)
+        proj_revenue = add_budget * total_roas_val
+
+        p1, p2, p3, p4 = st.columns(4)
+        p1.metric("추가 예산", f"₩{add_budget:,.0f}")
+        p2.metric("예상 클릭수", f"{proj_clicks:,.0f}")
+        p3.metric("예상 전환수", f"{proj_conv:,.0f}")
+        p4.metric("예상 매출액", f"₩{proj_revenue:,.0f}")
+
+        # 현재 기준 vs 추가 후
+        st.markdown("---")
+        st.markdown("**현재 페이스 기준 30일 예측**")
+        daily_spend = total_spend / days_in_period
+        daily_clicks = total_clicks / days_in_period
+        daily_conv = total_conversions / days_in_period
+        daily_rev = total_revenue / days_in_period
+
+        p5, p6, p7, p8 = st.columns(4)
+        p5.metric("30일 예상 광고비", f"₩{daily_spend*30:,.0f}")
+        p6.metric("30일 예상 클릭수", f"{daily_clicks*30:,.0f}")
+        p7.metric("30일 예상 전환수", f"{daily_conv*30:,.0f}")
+        p8.metric("30일 예상 매출액", f"₩{daily_rev*30:,.0f}")
+
+        # 목표 ROAS 달성을 위한 필요 예산
+        st.markdown("---")
+        target_roas = st.number_input("목표 ROAS", min_value=0.1, max_value=50.0, value=3.0, step=0.5)
+        if total_roas_val > 0 and total_clicks > 0:
+            needed_spend = total_revenue / target_roas
+            delta_spend = needed_spend - total_spend
+            if delta_spend > 0:
+                st.info(f"🎯 목표 ROAS {target_roas}x 달성을 위해 현재보다 **₩{delta_spend:,.0f}** 추가 집행 필요 (현재 ROAS: {total_roas_val:.2f}x)")
+            else:
+                st.success(f"✅ 현재 ROAS {total_roas_val:.2f}x로 목표 {target_roas}x를 이미 달성했습니다!")
+        else:
+            st.info("전환 데이터가 충분하지 않아 예측이 어렵습니다.")
+else:
+    st.info("예측 분석을 위한 광고비 데이터가 없습니다.")
 
 st.divider()
 
@@ -309,17 +461,19 @@ campaign_agg = (
     .reset_index()
 )
 campaign_agg["ctr"] = campaign_agg["clicks"] / campaign_agg["impressions"].replace(0, 1) * 100
+campaign_agg["cpc"] = campaign_agg["spend"] / campaign_agg["clicks"].replace(0, 1)
 campaign_agg["roas"] = campaign_agg["revenue"] / campaign_agg["spend"].replace(0, 1)
 campaign_agg = campaign_agg.sort_values("spend", ascending=False)
 
 display = campaign_agg.copy()
-display.columns = ["채널", "캠페인명", "노출수", "클릭수", "광고비(₩)", "전환수", "전환매출액(₩)", "CTR(%)", "ROAS"]
+display.columns = ["채널", "캠페인명", "노출수", "클릭수", "광고비(₩)", "전환수", "전환매출액(₩)", "CTR(%)", "CPC(₩)", "ROAS"]
 display["노출수"] = display["노출수"].apply(lambda x: f"{x:,.0f}")
 display["클릭수"] = display["클릭수"].apply(lambda x: f"{x:,.0f}")
 display["광고비(₩)"] = display["광고비(₩)"].apply(lambda x: f"₩{x:,.0f}")
 display["전환수"] = display["전환수"].apply(lambda x: f"{x:,.0f}")
 display["전환매출액(₩)"] = display["전환매출액(₩)"].apply(lambda x: f"₩{x:,.0f}")
 display["CTR(%)"] = display["CTR(%)"].apply(lambda x: f"{x:.2f}%")
+display["CPC(₩)"] = display["CPC(₩)"].apply(lambda x: f"₩{x:,.0f}")
 display["ROAS"] = display["ROAS"].apply(lambda x: f"{x:.2f}x")
 
 st.dataframe(display, use_container_width=True, hide_index=True, height=400)
@@ -328,5 +482,5 @@ st.dataframe(display, use_container_width=True, hide_index=True, height=400)
 
 st.caption(
     f"마지막 조회: {datetime.now().strftime('%Y-%m-%d %H:%M')} KST  |  "
-    "데이터 캐시 1시간  |  광고비·전환수는 각 플랫폼 기준"
+    "데이터 캐시 1시간  |  광고비·전환수는 각 플랫폼 기준  |  예측은 조회기간 평균 효율 기반 추정치"
 )
