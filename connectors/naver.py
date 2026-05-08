@@ -73,8 +73,9 @@ def get_naver_data(api_key: str, secret_key: str, customer_id: str, start_date: 
 
         for item in data:
             dt = item.get("dt", "")
-            if len(dt) == 8:
-                dt = f"{dt[:4]}-{dt[4:6]}-{dt[6:]}"
+            if len(dt) != 8:
+                continue
+            dt = f"{dt[:4]}-{dt[4:6]}-{dt[6:]}"
             spend = float(item.get("salesAmt", 0))
             clicks = int(item.get("clkCnt", 0))
             impressions = int(item.get("impCnt", 0))

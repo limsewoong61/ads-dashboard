@@ -52,13 +52,25 @@ hr { border-color: #1e2535 !important; }
     border-bottom: 2px solid #4f8ef7 !important;
 }
 
-/* 버튼 */
-.stButton button {
+/* 버튼 - primary */
+[data-testid="baseButton-primary"] {
     background: linear-gradient(90deg, #1877F2, #4f8ef7) !important;
     color: white !important;
     border: none !important;
     border-radius: 8px !important;
+    font-weight: 700 !important;
+}
+/* 버튼 - secondary */
+[data-testid="baseButton-secondary"] {
+    background: #1e2535 !important;
+    color: #8899bb !important;
+    border: 1px solid #2a3450 !important;
+    border-radius: 8px !important;
     font-weight: 600 !important;
+}
+[data-testid="baseButton-secondary"]:hover {
+    background: #2a3450 !important;
+    color: #c0d0f0 !important;
 }
 
 /* 데이터프레임 */
@@ -179,6 +191,8 @@ combined = pd.concat(
     [df.assign(channel=ch) for ch, df in active_data.items()],
     ignore_index=True,
 )
+# 날짜 없는 행 제거 (NAVER 집계 행 등)
+combined = combined[combined["date"].notna() & (combined["date"].astype(str).str.match(r"\d{4}-\d{2}-\d{2}"))]
 
 # ── Page Header ───────────────────────────────────────────────────────────────
 
@@ -341,11 +355,22 @@ METRIC_MAP = {
     "CTR (%)": "ctr",
 }
 
-col_left, col_mid, col_right = st.columns([2, 1, 1])
-with col_mid:
-    selected_label = st.selectbox("지표", list(METRIC_MAP.keys()))
-with col_right:
+if "trend_metric" not in st.session_state:
+    st.session_state.trend_metric = list(METRIC_MAP.keys())[0]
+
+_trend_left, _trend_right = st.columns([4, 1])
+with _trend_left:
+    _metric_cols = st.columns(len(METRIC_MAP))
+    for _i, _lbl in enumerate(METRIC_MAP.keys()):
+        with _metric_cols[_i]:
+            if st.button(_lbl, key=f"trend_m_{_i}", use_container_width=True,
+                         type="primary" if st.session_state.trend_metric == _lbl else "secondary"):
+                st.session_state.trend_metric = _lbl
+                st.rerun()
+with _trend_right:
     view_unit = st.radio("집계 단위", ["일별", "주별"], horizontal=True)
+
+selected_label = st.session_state.trend_metric
 
 y_col = METRIC_MAP[selected_label]
 
@@ -491,11 +516,19 @@ st.divider()
 
 st.subheader("유입경로 분석")
 
-treemap_metric_label = st.selectbox(
-    "기준 지표",
-    ["광고비 (₩)", "노출수", "클릭수", "전환수"],
-    key="treemap_metric",
-)
+_TREEMAP_METRICS = ["광고비 (₩)", "노출수", "클릭수", "전환수"]
+if "treemap_metric" not in st.session_state:
+    st.session_state.treemap_metric = _TREEMAP_METRICS[0]
+
+_tm_cols = st.columns(len(_TREEMAP_METRICS))
+for _i, _lbl in enumerate(_TREEMAP_METRICS):
+    with _tm_cols[_i]:
+        if st.button(_lbl, key=f"tm_m_{_i}", use_container_width=True,
+                     type="primary" if st.session_state.treemap_metric == _lbl else "secondary"):
+            st.session_state.treemap_metric = _lbl
+            st.rerun()
+
+treemap_metric_label = st.session_state.treemap_metric
 tm_col = METRIC_MAP[treemap_metric_label]
 
 treemap_df = (
