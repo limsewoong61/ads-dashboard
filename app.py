@@ -198,31 +198,31 @@ for ch, df in active_data.items():
 
 _chs = list(_ch_stats.keys())
 
-# 헤더 행 (채널명 + 색상)
-_header_cells = "<th style='text-align:left;padding:10px 14px;font-size:13px;color:#888;font-weight:600;border-bottom:1px solid #ddd;'>지표</th>"
-for ch in _chs:
-    c = CHANNEL_COLORS.get(ch, "#888")
-    _header_cells += f"<th style='text-align:right;padding:10px 14px;font-size:15px;font-weight:700;color:{c};border-bottom:3px solid {c};'>{ch}</th>"
-
-# 지표 행 데이터
-_rows_def = [
-    ("💰 광고비",    lambda s: f"₩{s['spd']:,.0f}"),
-    ("👁 노출수",    lambda s: f"{s['imp']:,.0f}"),
-    ("🖱 클릭수",    lambda s: f"{s['clk']:,.0f}"),
-    ("📊 CTR",      lambda s: f"{s['ctr']:.2f}%"),
-    ("💡 CPC",      lambda s: f"₩{s['cpc']:,.0f}"),
-    ("🎯 전환수",    lambda s: f"{s['conv']:,.0f}"),
-    ("💵 전환매출액", lambda s: f"₩{s['rev']:,.0f}"),
-    ("📈 ROAS",     lambda s: f"{s['roas']:.2f}x"),
+# 헤더 행 (지표명)
+_metrics_def = [
+    ("💰 광고비",     lambda s: f"₩{s['spd']:,.0f}"),
+    ("👁 노출수",     lambda s: f"{s['imp']:,.0f}"),
+    ("🖱 클릭수",     lambda s: f"{s['clk']:,.0f}"),
+    ("📊 CTR",       lambda s: f"{s['ctr']:.2f}%"),
+    ("💡 CPC",       lambda s: f"₩{s['cpc']:,.0f}"),
+    ("🎯 전환수",     lambda s: f"{s['conv']:,.0f}"),
+    ("💵 전환매출액",  lambda s: f"₩{s['rev']:,.0f}"),
+    ("📈 ROAS",      lambda s: f"{s['roas']:.2f}x"),
 ]
 
+_header_cells = "<th style='text-align:left;padding:10px 14px;font-size:13px;color:#888;font-weight:600;border-bottom:2px solid #ddd;min-width:90px'>채널</th>"
+for label, _ in _metrics_def:
+    _header_cells += f"<th style='text-align:right;padding:10px 14px;font-size:13px;color:#888;font-weight:600;border-bottom:2px solid #ddd;white-space:nowrap'>{label}</th>"
+
+# 채널 행 데이터
 _body_rows = ""
-for idx, (label, fn) in enumerate(_rows_def):
+for idx, ch in enumerate(_chs):
+    c = CHANNEL_COLORS.get(ch, "#888")
     bg = "rgba(0,0,0,0.03)" if idx % 2 == 0 else "transparent"
     _body_rows += f"<tr style='background:{bg}'>"
-    _body_rows += f"<td style='padding:10px 14px;font-weight:500;font-size:13px;color:#666;white-space:nowrap'>{label}</td>"
-    for ch in _chs:
-        _body_rows += f"<td style='text-align:right;padding:10px 14px;font-weight:600;font-size:14px;'>{fn(_ch_stats[ch])}</td>"
+    _body_rows += f"<td style='padding:12px 14px;font-weight:700;font-size:15px;color:{c};white-space:nowrap;border-left:4px solid {c}'>{ch}</td>"
+    for _, fn in _metrics_def:
+        _body_rows += f"<td style='text-align:right;padding:12px 14px;font-weight:600;font-size:14px;'>{fn(_ch_stats[ch])}</td>"
     _body_rows += "</tr>"
 
 st.markdown(f"""
