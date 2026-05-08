@@ -6,6 +6,7 @@ import json
 import urllib.parse
 import requests
 import pandas as pd
+from datetime import datetime, timedelta
 
 BASE_URL = "https://api.naver.com"
 EMPTY_COLS = ["date", "campaign", "impressions", "clicks", "ctr", "spend", "conversions", "revenue", "roas"]
@@ -73,25 +74,35 @@ def get_naver_data(api_key: str, secret_key: str, customer_id: str, start_date: 
 
         for item in data:
             raw_dt = item.get("dt", "")
+            spend_total = float(item.get("salesAmt", 0))
+            clicks_total = int(item.get("clkCnt", 0))
+            imps_total = int(item.get("impCnt", 0))
+
             if len(raw_dt) == 8:
+                # 일별 데이터: 그대로 사용
                 dt = f"{raw_dt[:4]}-{raw_dt[4:6]}-{raw_dt[6:]}"
+                rows.append({
+                    "date": dt, "campaign": camp_name,
+                    "impressions": imps_total, "clicks": clicks_total,
+                    "ctr": (clicks_total / imps_total * 100) if imps_total > 0 else 0.0,
+                    "spend": spend_total, "conversions": 0, "revenue": 0.0, "roas": 0.0,
+                })
             else:
-                # API가 집계 행만 반환할 때 기간 시작일을 날짜로 사용
-                dt = str(start_date)
-            spend = float(item.get("salesAmt", 0))
-            clicks = int(item.get("clkCnt", 0))
-            impressions = int(item.get("impCnt", 0))
-            rows.append({
-                "date": dt,
-                "campaign": camp_name,
-                "impressions": impressions,
-                "clicks": clicks,
-                "ctr": (clicks / impressions * 100) if impressions > 0 else 0.0,
-                "spend": spend,
-                "conversions": 0,
-                "revenue": 0.0,
-                "roas": 0.0,
-            })
+                # 집계 행: 일수로 균등 분배해 차트 스파이크 방지
+                d0 = datetime.strptime(str(start_date), "%Y-%m-%d")
+                d1 = datetime.strptime(str(end_date), "%Y-%m-%d")
+                num_days = max((d1 - d0).days + 1, 1)
+                daily_spend = spend_total / num_days
+                daily_clicks = clicks_total / num_days
+                daily_imps = imps_total / num_days
+                for i in range(num_days):
+                    day = (d0 + timedelta(days=i)).strftime("%Y-%m-%d")
+                    rows.append({
+                        "date": day, "campaign": camp_name,
+                        "impressions": daily_imps, "clicks": daily_clicks,
+                        "ctr": (daily_clicks / daily_imps * 100) if daily_imps > 0 else 0.0,
+                        "spend": daily_spend, "conversions": 0, "revenue": 0.0, "roas": 0.0,
+                    })
 
     if stat_errors and not rows:
         raise RuntimeError("NAVER API 오류: " + " | ".join(stat_errors[:2]))
