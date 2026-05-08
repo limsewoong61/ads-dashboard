@@ -45,7 +45,7 @@ def get_naver_data(api_key: str, secret_key: str, customer_id: str, start_date: 
 
     since = str(start_date).replace("-", "")
     until = str(end_date).replace("-", "")
-    fields = json.dumps(["impCnt", "clkCnt", "salesAmt", "rvsCnt"], separators=(',', ':'))
+    fields = "impCnt,clkCnt,salesAmt,rvsCnt"
     time_range = json.dumps({"since": since, "until": until}, separators=(',', ':'))
 
     rows = []
