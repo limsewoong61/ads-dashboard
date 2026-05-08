@@ -45,7 +45,7 @@ def get_naver_data(api_key: str, secret_key: str, customer_id: str, start_date: 
 
     since = str(start_date).replace("-", "")
     until = str(end_date).replace("-", "")
-    fields = json.dumps(["impCnt", "clkCnt", "ctr", "salesAmt", "rvsCnt", "convAmt"], separators=(',', ':'))
+    fields = json.dumps(["impCnt", "clkCnt", "salesAmt", "rvsCnt"], separators=(',', ':'))
     time_range = json.dumps({"since": since, "until": until}, separators=(',', ':'))
 
     rows = []
@@ -57,8 +57,9 @@ def get_naver_data(api_key: str, secret_key: str, customer_id: str, start_date: 
         if not camp_id:
             continue
 
-        stat_path = f"/ncc/campaigns/{camp_id}/stats"
+        stat_path = "/stats"
         query = urllib.parse.urlencode({
+            "ids": camp_id,
             "fields": fields,
             "timeRange": time_range,
             "timeUnit": "date",
@@ -70,7 +71,7 @@ def get_naver_data(api_key: str, secret_key: str, customer_id: str, start_date: 
         )
 
         if not resp.ok:
-            stat_errors.append(f"{camp_name}: HTTP {resp.status_code} - {resp.text[:300]}")
+            stat_errors.append(f"{camp_name}: HTTP {resp.status_code} - {resp.text[:300]} | URL: {full_url[:300]}")
             continue
 
         body = resp.json()
@@ -81,17 +82,18 @@ def get_naver_data(api_key: str, secret_key: str, customer_id: str, start_date: 
             if len(dt) == 8:
                 dt = f"{dt[:4]}-{dt[4:6]}-{dt[6:]}"
             spend = float(item.get("salesAmt", 0))
-            conv_amt = float(item.get("convAmt", 0))
+            clicks = int(item.get("clkCnt", 0))
+            impressions = int(item.get("impCnt", 0))
             rows.append({
                 "date": dt,
                 "campaign": camp_name,
-                "impressions": int(item.get("impCnt", 0)),
-                "clicks": int(item.get("clkCnt", 0)),
-                "ctr": float(item.get("ctr", 0)) * 100,
+                "impressions": impressions,
+                "clicks": clicks,
+                "ctr": (clicks / impressions * 100) if impressions > 0 else 0.0,
                 "spend": spend,
                 "conversions": int(item.get("rvsCnt", 0)),
-                "revenue": conv_amt,
-                "roas": conv_amt / spend if spend > 0 else 0.0,
+                "revenue": 0.0,
+                "roas": 0.0,
             })
 
     if not rows:
