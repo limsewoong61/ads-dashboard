@@ -18,26 +18,60 @@ st.set_page_config(
 
 st.markdown("""
 <style>
+/* 전체 배경 */
+.stApp { background-color: #0d1117; }
+
+/* 메트릭 카드 */
 [data-testid="metric-container"] {
-    background: #f8faff;
-    border: 1px solid #e0e7ff;
-    border-radius: 10px;
-    padding: 16px;
-}
-.channel-badge {
-    display: inline-block;
-    padding: 2px 10px;
+    background: linear-gradient(135deg, #161b27 0%, #1e2535 100%);
+    border: 1px solid #2a3450;
     border-radius: 12px;
-    font-size: 13px;
+    padding: 18px 20px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+[data-testid="metric-container"]:hover {
+    border-color: #4f8ef7;
+    transition: border-color 0.2s;
+}
+[data-testid="stMetricLabel"] { color: #8899bb !important; font-size: 12px !important; }
+[data-testid="stMetricValue"] { color: #e8f0ff !important; font-size: 22px !important; font-weight: 700 !important; }
+
+/* 사이드바 */
+[data-testid="stSidebar"] { background-color: #0a0e18 !important; border-right: 1px solid #1e2535; }
+
+/* 구분선 */
+hr { border-color: #1e2535 !important; }
+
+/* 탭 */
+[data-testid="stTabs"] button {
+    color: #8899bb !important;
     font-weight: 600;
 }
-.channel-header {
-    font-size: 16px;
-    font-weight: 700;
-    padding: 8px 0 4px 0;
-    border-bottom: 3px solid;
-    margin-bottom: 12px;
+[data-testid="stTabs"] button[aria-selected="true"] {
+    color: #4f8ef7 !important;
+    border-bottom: 2px solid #4f8ef7 !important;
 }
+
+/* 버튼 */
+.stButton button {
+    background: linear-gradient(90deg, #1877F2, #4f8ef7) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+}
+
+/* 데이터프레임 */
+[data-testid="stDataFrame"] {
+    border: 1px solid #2a3450 !important;
+    border-radius: 10px !important;
+}
+
+/* 서브헤더 */
+h2, h3 { color: #c8d8ff !important; }
+
+/* selectbox, radio */
+[data-testid="stSelectbox"] label, [data-testid="stRadio"] label { color: #8899bb !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -210,23 +244,23 @@ _metrics_def = [
     ("📈 ROAS",      lambda s: f"{s['roas']:.2f}x"),
 ]
 
-_header_cells = "<th style='text-align:left;padding:10px 14px;font-size:13px;color:#888;font-weight:600;border-bottom:2px solid #ddd;min-width:90px'>채널</th>"
+_header_cells = "<th style='text-align:left;padding:12px 16px;font-size:12px;color:#5a6a8a;font-weight:600;border-bottom:1px solid #2a3450;min-width:100px;letter-spacing:0.05em'>채널</th>"
 for label, _ in _metrics_def:
-    _header_cells += f"<th style='text-align:right;padding:10px 14px;font-size:13px;color:#888;font-weight:600;border-bottom:2px solid #ddd;white-space:nowrap'>{label}</th>"
+    _header_cells += f"<th style='text-align:right;padding:12px 16px;font-size:12px;color:#5a6a8a;font-weight:600;border-bottom:1px solid #2a3450;white-space:nowrap;letter-spacing:0.05em'>{label}</th>"
 
 # 채널 행 데이터
 _body_rows = ""
 for idx, ch in enumerate(_chs):
     c = CHANNEL_COLORS.get(ch, "#888")
-    bg = "rgba(0,0,0,0.03)" if idx % 2 == 0 else "transparent"
-    _body_rows += f"<tr style='background:{bg}'>"
-    _body_rows += f"<td style='padding:12px 14px;font-weight:700;font-size:15px;color:{c};white-space:nowrap;border-left:4px solid {c}'>{ch}</td>"
+    bg = "rgba(255,255,255,0.03)" if idx % 2 == 0 else "transparent"
+    _body_rows += f"<tr style='background:{bg};border-bottom:1px solid #1e2535'>"
+    _body_rows += f"<td style='padding:14px 16px;font-weight:700;font-size:15px;color:{c};white-space:nowrap;border-left:4px solid {c}'>{ch}</td>"
     for _, fn in _metrics_def:
-        _body_rows += f"<td style='text-align:right;padding:12px 14px;font-weight:600;font-size:14px;'>{fn(_ch_stats[ch])}</td>"
+        _body_rows += f"<td style='text-align:right;padding:14px 16px;font-weight:600;font-size:14px;color:#d0deff;'>{fn(_ch_stats[ch])}</td>"
     _body_rows += "</tr>"
 
 st.markdown(f"""
-<div style='overflow-x:auto;border:1px solid #e0e7ff;border-radius:12px;'>
+<div style='overflow-x:auto;border:1px solid #2a3450;border-radius:12px;background:#161b27;'>
 <table style='width:100%;border-collapse:collapse;'>
   <thead><tr>{_header_cells}</tr></thead>
   <tbody>{_body_rows}</tbody>
@@ -253,6 +287,17 @@ channel_agg = (
 channel_agg["ctr"] = channel_agg["clicks"] / channel_agg["impressions"].replace(0, 1) * 100
 channel_agg["roas"] = channel_agg["revenue"] / channel_agg["spend"].replace(0, 1)
 
+DARK_LAYOUT = dict(
+    plot_bgcolor="#161b27",
+    paper_bgcolor="#161b27",
+    font_color="#c0d0f0",
+    title_font_size=14,
+    title_font_color="#c8d8ff",
+    xaxis=dict(gridcolor="#1e2535", linecolor="#2a3450", tickcolor="#2a3450"),
+    yaxis=dict(gridcolor="#1e2535", linecolor="#2a3450", tickcolor="#2a3450"),
+    legend=dict(bgcolor="#161b27", bordercolor="#2a3450"),
+)
+
 def bar_chart(df, y, title, fmt="{:,.0f}", prefix="", suffix=""):
     labels = df[y].apply(lambda v: f"{prefix}{fmt.format(v)}{suffix}")
     fig = px.bar(
@@ -261,10 +306,9 @@ def bar_chart(df, y, title, fmt="{:,.0f}", prefix="", suffix=""):
         title=title,
         text=labels,
     )
-    fig.update_layout(showlegend=False, height=380, title_font_size=14,
-                      plot_bgcolor="white", paper_bgcolor="white")
+    fig.update_layout(**DARK_LAYOUT, showlegend=False, height=380)
     fig.update_traces(textposition="outside", marker_line_width=0)
-    fig.update_yaxes(showgrid=True, gridcolor="#f0f0f0")
+    fig.update_yaxes(showgrid=True)
     return fig
 
 tabs = st.tabs(["💰 광고비", "👁 노출수", "🖱 클릭수", "📊 CTR", "🎯 전환수", "💵 전환 매출액", "📈 ROAS"])
@@ -334,11 +378,11 @@ fig_trend = px.line(
     markers=True,
 )
 fig_trend.update_layout(
+    **DARK_LAYOUT,
     height=420, legend_title_text="채널",
-    plot_bgcolor="white", paper_bgcolor="white",
     hovermode="x unified",
 )
-fig_trend.update_yaxes(showgrid=True, gridcolor="#f0f0f0")
+fig_trend.update_traces(line_width=2.5)
 fig_trend.update_xaxes(showgrid=False)
 st.plotly_chart(fig_trend, use_container_width=True)
 
@@ -470,7 +514,7 @@ if not treemap_df.empty:
         color_discrete_map=CHANNEL_COLORS,
         title=f"채널 › 캠페인 ({treemap_metric_label})",
     )
-    fig_tree.update_layout(height=500)
+    fig_tree.update_layout(height=500, **{k: v for k, v in DARK_LAYOUT.items() if k in ["plot_bgcolor","paper_bgcolor","font_color","title_font_color"]})
     fig_tree.update_traces(textinfo="label+value+percent parent")
     st.plotly_chart(fig_tree, use_container_width=True)
 else:
