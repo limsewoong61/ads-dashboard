@@ -501,90 +501,135 @@ if forecast_data:
 
     # ── 채널별 예산 재배분 시뮬레이터 ────────────────────────────────────────
     st.markdown("---")
-    st.markdown("**채널별 예산 재배분 시뮬레이터**")
-    st.caption(f"현재 총 예산 ₩{total_spend:,.0f} 기준 · 채널 배분을 바꿔 전체 ROAS 변화를 확인하세요")
+    st.markdown("**채널별 일 예산 시뮬레이터 (30일 기준 예측)**")
+    st.caption("조회 기간 데이터 기반 효율 적용 · ROAS/전환은 META·Google만 계산 · NAVER는 광고비만 표시")
 
-    _ch_roas  = {d["channel"]: d["roas"]  for d in forecast_data}
-    _ch_spend = {d["channel"]: d["spend"] for d in forecast_data}
-    _all_chs  = [d["channel"] for d in forecast_data]
+    _ch_roas   = {d["channel"]: d["roas"]  for d in forecast_data}
+    _ch_spend  = {d["channel"]: d["spend"] for d in forecast_data}
+    _ch_clicks = {d["channel"]: d.get("daily_spend", d["spend"] / days_in_period) for d in forecast_data}
+    _all_chs   = [d["channel"] for d in forecast_data]
 
-    if any(v == 0 for v in _ch_roas.values()):
-        zero_chs = [ch for ch, v in _ch_roas.items() if v == 0]
-        st.caption(f"⚠️ {', '.join(zero_chs)} — 전환 추적 미연동으로 ROAS 0x · 해당 채널 예산은 매출 기여 0으로 계산됩니다")
+    # 현재 일 평균 예산
+    _ch_daily  = {ch: _ch_spend[ch] / days_in_period for ch in _all_chs}
+
+    # 전환 추적 가능 채널 (ROAS > 0)
+    _tracked   = [ch for ch in _all_chs if _ch_roas[ch] > 0]
+    _untracked = [ch for ch in _all_chs if _ch_roas[ch] == 0]
+
+    # 채널별 현재 CPC / 전환율
+    _ch_cpc    = {d["channel"]: d["cpc"]       for d in forecast_data}
+    _ch_cvr    = {d["channel"]: d["conv_rate"] for d in forecast_data}
 
     _rcols = st.columns(len(_all_chs))
-    _new_budgets = {}
+    _daily_inputs = {}
+
     for _i, _ch in enumerate(_all_chs):
         with _rcols[_i]:
-            _color = CHANNEL_COLORS.get(_ch, "#888")
-            _rc = _ch_roas[_ch]
-            _rc_color = "#3ddc84" if _rc >= 1.0 else ("#f7a05a" if _rc >= 0.5 else "#f75a5a")
+            _color   = CHANNEL_COLORS.get(_ch, "#888")
+            _rc      = _ch_roas[_ch]
+            _tracked_ch = _rc > 0
+            _rc_color = "#3ddc84" if _rc >= 1.0 else ("#f7a05a" if _rc >= 0.5 else "#8899bb")
+            _tag = "전환 추적 가능" if _tracked_ch else "전환 미측정"
+            _tag_color = "#3ddc84" if _tracked_ch else "#f7a05a"
+
             st.markdown(f"""
 <div style='background:#1e2535;border:1px solid #2a3450;border-radius:10px;padding:14px 16px;margin-bottom:8px'>
-  <div style='color:{_color};font-size:15px;font-weight:700'>{_ch}</div>
-  <div style='display:flex;justify-content:space-between;margin-top:8px'>
-    <div><div style='color:#8899bb;font-size:11px'>현재 예산</div>
-         <div style='color:#c0d0f0;font-size:14px;font-weight:600'>₩{_ch_spend[_ch]:,.0f}</div></div>
-    <div style='text-align:right'><div style='color:#8899bb;font-size:11px'>현재 ROAS</div>
-         <div style='color:{_rc_color};font-size:14px;font-weight:700'>{_rc:.2f}x</div></div>
+  <div style='display:flex;justify-content:space-between;align-items:center'>
+    <div style='color:{_color};font-size:15px;font-weight:700'>{_ch}</div>
+    <div style='background:{"#1a3020" if _tracked_ch else "#2a2010"};color:{_tag_color};
+         font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px'>{_tag}</div>
+  </div>
+  <div style='display:flex;justify-content:space-between;margin-top:10px'>
+    <div><div style='color:#8899bb;font-size:11px'>현재 일평균 예산</div>
+         <div style='color:#c0d0f0;font-size:13px;font-weight:600'>₩{_ch_daily[_ch]:,.0f}</div></div>
+    <div style='text-align:right'><div style='color:#8899bb;font-size:11px'>{"ROAS" if _tracked_ch else "ROAS"}</div>
+         <div style='color:{_rc_color};font-size:13px;font-weight:700'>{"%.2fx" % _rc if _tracked_ch else "미측정"}</div></div>
   </div>
 </div>
 """, unsafe_allow_html=True)
-            _new_budgets[_ch] = st.number_input(
-                f"새 예산 (₩)",
+
+            _daily_inputs[_ch] = st.number_input(
+                f"일 예산 (₩)",
                 min_value=0,
-                value=int(_ch_spend[_ch]),
-                step=500_000,
-                key=f"realloc_{_ch}",
-            )
-            _proj_ch_rev = _new_budgets[_ch] * _rc
-            _delta_ch = _new_budgets[_ch] - _ch_spend[_ch]
-            _dcolor = "#f75a5a" if _delta_ch > 0 else "#3ddc84" if _delta_ch < 0 else "#8899bb"
-            st.caption(
-                f"예상 매출 ₩{_proj_ch_rev:,.0f} &nbsp;|&nbsp; "
-                f"<span style='color:{_dcolor}'>{'▲' if _delta_ch>0 else '▼' if _delta_ch<0 else '─'}"
-                f"₩{abs(_delta_ch):,.0f}</span>",
-                unsafe_allow_html=True,
+                value=int(_ch_daily[_ch]),
+                step=50_000,
+                key=f"daily_{_ch}",
             )
 
-    _total_new   = sum(_new_budgets.values())
-    _proj_rev    = sum(_new_budgets[ch] * _ch_roas[ch] for ch in _all_chs)
-    _proj_roas   = _proj_rev / _total_new if _total_new > 0 else 0
-    _delta_roas  = _proj_roas - total_roas_val
-    _delta_bud   = _total_new - total_spend
-    _rr_color    = "#3ddc84" if _delta_roas > 0.005 else ("#f75a5a" if _delta_roas < -0.005 else "#c0d0f0")
-    _bd_color    = "#f75a5a" if _delta_bud > 0 else "#3ddc84" if _delta_bud < 0 else "#8899bb"
-    _arrow       = "▲" if _delta_roas > 0.005 else ("▼" if _delta_roas < -0.005 else "─")
-    _label       = "개선" if _delta_roas > 0.005 else ("하락" if _delta_roas < -0.005 else "동일")
+            # 채널별 30일 예측 미리보기
+            _m30_spend = _daily_inputs[_ch] * 30
+            _m30_rev   = _m30_spend * _rc if _tracked_ch else None
+            _m30_clk   = int(_m30_spend / _ch_cpc[_ch]) if _ch_cpc[_ch] > 0 else 0
+            _m30_conv  = int(_m30_clk * _ch_cvr[_ch]) if _tracked_ch else None
+
+            if _tracked_ch:
+                st.caption(f"30일 예산 ₩{_m30_spend:,.0f} · 예상매출 ₩{_m30_rev:,.0f} · 전환 {_m30_conv}건")
+            else:
+                st.caption(f"30일 예산 ₩{_m30_spend:,.0f} · 전환/매출 미측정")
+
+    # 결과 카드
+    _total_daily   = sum(_daily_inputs.values())
+    _total_m30     = _total_daily * 30
+
+    # ROAS는 추적 가능 채널만
+    _tracked_m30_spend = sum(_daily_inputs[ch] * 30 for ch in _tracked)
+    _tracked_m30_rev   = sum(_daily_inputs[ch] * 30 * _ch_roas[ch] for ch in _tracked)
+    _proj_roas         = _tracked_m30_rev / _tracked_m30_spend if _tracked_m30_spend > 0 else 0
+
+    # 현재 추적 가능 채널 ROAS (비교용)
+    _cur_tracked_spend = sum(_ch_spend[ch] for ch in _tracked)
+    _cur_tracked_rev   = sum(_ch_spend[ch] * _ch_roas[ch] for ch in _tracked)
+    _cur_roas          = _cur_tracked_rev / _cur_tracked_spend if _cur_tracked_spend > 0 else 0
+
+    _proj_clicks = sum(
+        int(_daily_inputs[ch] * 30 / _ch_cpc[ch]) for ch in _tracked if _ch_cpc[ch] > 0
+    )
+    _proj_conv = sum(
+        int(_daily_inputs[ch] * 30 / _ch_cpc[ch] * _ch_cvr[ch])
+        for ch in _tracked if _ch_cpc[ch] > 0
+    )
+
+    _rr_color = "#3ddc84" if _proj_roas > _cur_roas + 0.01 else ("#f75a5a" if _proj_roas < _cur_roas - 0.01 else "#c0d0f0")
+    _arrow    = "▲" if _proj_roas > _cur_roas + 0.01 else ("▼" if _proj_roas < _cur_roas - 0.01 else "─")
+
+    _untracked_m30 = sum(_daily_inputs[ch] * 30 for ch in _untracked)
 
     st.markdown(f"""
 <div style='background:linear-gradient(135deg,#1a2640,#1e2535);border:1px solid #3a5080;
-     border-radius:12px;padding:20px 24px;margin-top:4px'>
-  <div style='color:#8899bb;font-size:12px;font-weight:600;margin-bottom:14px;letter-spacing:0.05em'>
-    재배분 후 예상 결과
+     border-radius:12px;padding:20px 24px;margin-top:8px'>
+  <div style='color:#8899bb;font-size:12px;font-weight:600;margin-bottom:4px;letter-spacing:0.05em'>
+    30일 예측 결과
   </div>
-  <div style='display:flex;gap:40px;flex-wrap:wrap;align-items:center'>
+  <div style='color:#5a6a8a;font-size:11px;margin-bottom:16px'>
+    ROAS·전환은 {", ".join(_tracked)} 기준 · {", ".join(_untracked) if _untracked else "없음"}은 전환 미측정으로 제외
+  </div>
+  <div style='display:flex;gap:32px;flex-wrap:wrap;align-items:flex-start'>
     <div>
-      <div style='color:#8899bb;font-size:11px'>현재 전체 ROAS</div>
-      <div style='color:#c0d0f0;font-size:28px;font-weight:700'>{total_roas_val:.2f}x</div>
-      <div style='color:#5a6a8a;font-size:11px'>매출 ₩{total_revenue:,.0f}</div>
+      <div style='color:#8899bb;font-size:11px'>현재 ROAS<br><span style='font-size:10px'>({", ".join(_tracked)})</span></div>
+      <div style='color:#c0d0f0;font-size:26px;font-weight:700'>{_cur_roas:.2f}x</div>
     </div>
-    <div style='color:#4f8ef7;font-size:28px'>→</div>
+    <div style='color:#4f8ef7;font-size:24px;padding-top:8px'>→</div>
     <div>
-      <div style='color:#8899bb;font-size:11px'>재배분 후 예상 ROAS</div>
-      <div style='color:{_rr_color};font-size:28px;font-weight:700'>{_proj_roas:.2f}x</div>
-      <div style='color:{_rr_color};font-size:12px'>{_arrow} {abs(_delta_roas):.2f}x {_label}</div>
+      <div style='color:#8899bb;font-size:11px'>예상 ROAS</div>
+      <div style='color:{_rr_color};font-size:26px;font-weight:700'>{_proj_roas:.2f}x</div>
+      <div style='color:{_rr_color};font-size:11px'>{_arrow} {abs(_proj_roas - _cur_roas):.2f}x</div>
+    </div>
+    <div style='width:1px;background:#2a3450;margin:0 4px'></div>
+    <div>
+      <div style='color:#8899bb;font-size:11px'>30일 예상 매출</div>
+      <div style='color:#c0d0f0;font-size:26px;font-weight:700'>₩{_tracked_m30_rev:,.0f}</div>
+      <div style='color:#5a6a8a;font-size:11px'>전환 약 {_proj_conv}건</div>
     </div>
     <div>
-      <div style='color:#8899bb;font-size:11px'>예상 매출</div>
-      <div style='color:#c0d0f0;font-size:28px;font-weight:700'>₩{_proj_rev:,.0f}</div>
-      <div style='color:#5a6a8a;font-size:11px'>현재 대비 {"+" if _proj_rev-total_revenue>=0 else ""}₩{_proj_rev-total_revenue:,.0f}</div>
+      <div style='color:#8899bb;font-size:11px'>30일 총 광고비</div>
+      <div style='color:#c0d0f0;font-size:26px;font-weight:700'>₩{_total_m30:,.0f}</div>
+      <div style='color:#5a6a8a;font-size:11px'>일 예산 ₩{_total_daily:,.0f}</div>
     </div>
-    <div style='margin-left:auto;text-align:right'>
-      <div style='color:#8899bb;font-size:11px'>총 예산</div>
-      <div style='color:{_bd_color};font-size:20px;font-weight:700'>₩{_total_new:,.0f}</div>
-      <div style='color:{_bd_color};font-size:11px'>{"+" if _delta_bud>=0 else ""}₩{_delta_bud:,.0f} vs 현재</div>
-    </div>
+    {f"""<div style='background:#2a2010;border:1px solid #4a3a10;border-radius:8px;padding:10px 14px'>
+      <div style='color:#f7a05a;font-size:11px;font-weight:600'>NAVER 30일 예산</div>
+      <div style='color:#f7a05a;font-size:18px;font-weight:700'>₩{_untracked_m30:,.0f}</div>
+      <div style='color:#5a4a2a;font-size:10px'>전환·매출 미측정</div>
+    </div>""" if _untracked else ""}
   </div>
 </div>
 """, unsafe_allow_html=True)
