@@ -455,16 +455,19 @@ if forecast_data:
     with col_f2:
         st.markdown("**추가 예산 투입 시 예상 성과**")
 
-        # 슬라이더로 추가 예산 입력
-        max_budget = int(total_spend * 2) if total_spend > 0 else 10_000_000
-        add_budget = st.slider(
-            "추가 예산 (₩)",
-            min_value=100_000,
-            max_value=max(max_budget, 10_000_000),
-            value=min(1_000_000, max_budget),
-            step=100_000,
-            format="₩%d",
-        )
+        max_budget = max(int(total_spend * 2), 10_000_000)
+        _sl_col, _in_col = st.columns([3, 1])
+        with _sl_col:
+            slider_val = st.slider(
+                "추가 예산 슬라이더 (₩)",
+                min_value=100_000, max_value=max_budget,
+                value=1_000_000, step=100_000, format="₩%d",
+            )
+        with _in_col:
+            add_budget = st.number_input(
+                "직접 입력 (₩)", min_value=0, max_value=max_budget,
+                value=slider_val, step=100_000,
+            )
 
         # 현재 효율 기반 예측
         total_cpc = total_spend / total_clicks if total_clicks > 0 else 0
@@ -481,7 +484,7 @@ if forecast_data:
         p3.metric("예상 전환수", f"{proj_conv:,.0f}")
         p4.metric("예상 매출액", f"₩{proj_revenue:,.0f}")
 
-        # 현재 기준 vs 추가 후
+        # 현재 기준 30일 예측
         st.markdown("---")
         st.markdown("**현재 페이스 기준 30일 예측**")
         daily_spend = total_spend / days_in_period
@@ -495,18 +498,44 @@ if forecast_data:
         p7.metric("30일 예상 전환수", f"{daily_conv*30:,.0f}")
         p8.metric("30일 예상 매출액", f"₩{daily_rev*30:,.0f}")
 
-        # 목표 ROAS 달성을 위한 필요 예산
+        # 목표 ROAS 기반 예산 시뮬레이션
         st.markdown("---")
-        target_roas = st.number_input("목표 ROAS", min_value=0.1, max_value=50.0, value=3.0, step=0.5)
-        if total_roas_val > 0 and total_clicks > 0:
-            needed_spend = total_revenue / target_roas
-            delta_spend = needed_spend - total_spend
-            if delta_spend > 0:
-                st.info(f"🎯 목표 ROAS {target_roas}x 달성을 위해 현재보다 **₩{delta_spend:,.0f}** 추가 집행 필요 (현재 ROAS: {total_roas_val:.2f}x)")
+        st.markdown("**목표 ROAS 달성 예산 시뮬레이션**")
+        _r_col, _rv_col = st.columns(2)
+        with _r_col:
+            target_roas = st.number_input(
+                "목표 ROAS", min_value=0.1, max_value=50.0, value=3.0, step=0.1,
+                format="%.1f",
+            )
+        with _rv_col:
+            default_rev_goal = int(max(total_revenue * 2, total_spend * target_roas)) if total_spend > 0 else 10_000_000
+            target_revenue_goal = st.number_input(
+                "목표 매출액 (₩)", min_value=0, value=default_rev_goal, step=1_000_000,
+            )
+
+        if total_roas_val > 0:
+            # 현재 ROAS vs 목표 ROAS
+            if total_roas_val >= target_roas:
+                st.success(f"✅ 현재 ROAS **{total_roas_val:.2f}x**로 목표 **{target_roas:.1f}x**를 이미 달성했습니다!")
             else:
-                st.success(f"✅ 현재 ROAS {total_roas_val:.2f}x로 목표 {target_roas}x를 이미 달성했습니다!")
+                st.warning(f"⚠️ 현재 ROAS **{total_roas_val:.2f}x** — 목표 **{target_roas:.1f}x** 미달성 (현재 효율 기준 {target_roas/total_roas_val:.1f}배 개선 필요)")
+
+            # 목표 매출액 달성을 위한 필요 예산
+            if target_revenue_goal > 0 and target_roas > 0:
+                needed_spend = target_revenue_goal / target_roas
+                delta = needed_spend - total_spend
+                st.markdown(f"""
+<div style='background:#1e2535;border:1px solid #2a3450;border-radius:10px;padding:16px 20px;margin-top:8px'>
+<div style='color:#8899bb;font-size:12px;margin-bottom:10px'>목표 매출액 <b style='color:#e0e6f0'>₩{target_revenue_goal:,.0f}</b> / 목표 ROAS <b style='color:#e0e6f0'>{target_roas:.1f}x</b> 달성 시나리오</div>
+<div style='display:flex;gap:32px;flex-wrap:wrap'>
+  <div><div style='color:#8899bb;font-size:11px'>필요 광고 예산</div><div style='color:#4f8ef7;font-size:22px;font-weight:700'>₩{needed_spend:,.0f}</div></div>
+  <div><div style='color:#8899bb;font-size:11px'>현재 대비</div><div style='color:{"#f75a5a" if delta > 0 else "#3ddc84"};font-size:22px;font-weight:700'>{"+" if delta > 0 else ""}₩{delta:,.0f}</div></div>
+  <div><div style='color:#8899bb;font-size:11px'>현재 광고비</div><div style='color:#c0d0f0;font-size:22px;font-weight:700'>₩{total_spend:,.0f}</div></div>
+</div>
+</div>
+""", unsafe_allow_html=True)
         else:
-            st.info("전환 데이터가 충분하지 않아 예측이 어렵습니다.")
+            st.info("전환 매출 데이터가 없어 ROAS 기반 예측이 어렵습니다. (META·NAVER 전환 추적 연동 필요)")
 else:
     st.info("예측 분석을 위한 광고비 데이터가 없습니다.")
 
