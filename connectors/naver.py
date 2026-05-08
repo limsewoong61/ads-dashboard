@@ -90,8 +90,7 @@ def get_naver_data(api_key: str, secret_key: str, customer_id: str, start_date: 
                 "roas": 0.0,
             })
 
-    if not rows:
-        err_detail = (" | ".join(stat_errors[:3])) if stat_errors else "해당 기간 데이터 없음"
-        raise RuntimeError(f"NAVER 통계 데이터 없음: {err_detail}")
+    if stat_errors and not rows:
+        raise RuntimeError("NAVER API 오류: " + " | ".join(stat_errors[:2]))
 
-    return pd.DataFrame(rows)
+    return pd.DataFrame(rows) if rows else pd.DataFrame(columns=EMPTY_COLS)
