@@ -44,67 +44,57 @@ def get_naver_data(api_key: str, secret_key: str, customer_id: str, start_date: 
     if not campaigns:
         raise RuntimeError("NAVER 캠페인 목록이 비어있습니다. API 키와 Customer ID를 확인해주세요.")
 
-    since = str(start_date).replace("-", "")
-    until = str(end_date).replace("-", "")
     fields = json.dumps(["impCnt", "clkCnt", "salesAmt"], separators=(',', ':'))
-    time_range = json.dumps({"since": since, "until": until}, separators=(',', ':'))
+    camp_map = {c["nccCampaignId"]: c["name"] for c in campaigns if c.get("nccCampaignId")}
+    all_ids = ",".join(camp_map.keys())
+
+    d0 = datetime.strptime(str(start_date), "%Y-%m-%d")
+    d1 = datetime.strptime(str(end_date), "%Y-%m-%d")
+    num_days = (d1 - d0).days + 1
 
     rows = []
     stat_errors = []
 
-    for camp in campaigns:
-        camp_id = camp.get("nccCampaignId", "")
-        camp_name = camp.get("name", "")
-        if not camp_id:
-            continue
+    # 하루씩 조회해 실제 일별 데이터 수집
+    for i in range(num_days):
+        day = d0 + timedelta(days=i)
+        day_str = day.strftime("%Y%m%d")
+        date_str = day.strftime("%Y-%m-%d")
 
+        time_range = json.dumps({"since": day_str, "until": day_str}, separators=(',', ':'))
         stat_path = "/stats"
-        full_url = f"{BASE_URL}{stat_path}?ids={camp_id}&fields={fields}&timeRange={time_range}&timeUnit=date"
+        full_url = f"{BASE_URL}{stat_path}?ids={all_ids}&fields={fields}&timeRange={time_range}&timeUnit=date"
         resp = requests.get(
             full_url,
             headers=_headers("GET", stat_path, api_key, secret_key, customer_id),
         )
 
         if not resp.ok:
-            stat_errors.append(f"{camp_name}: HTTP {resp.status_code} - {resp.text[:300]} | URL: {full_url[:300]}")
+            stat_errors.append(f"{date_str}: HTTP {resp.status_code} - {resp.text[:200]}")
             continue
 
         body = resp.json()
         data = body if isinstance(body, list) else body.get("data", [])
 
         for item in data:
-            raw_dt = item.get("dt", "")
-            spend_total = float(item.get("salesAmt", 0))
-            clicks_total = int(item.get("clkCnt", 0))
-            imps_total = int(item.get("impCnt", 0))
-
-            if len(raw_dt) == 8:
-                # 일별 데이터: 그대로 사용
-                dt = f"{raw_dt[:4]}-{raw_dt[4:6]}-{raw_dt[6:]}"
-                rows.append({
-                    "date": dt, "campaign": camp_name,
-                    "impressions": imps_total, "clicks": clicks_total,
-                    "ctr": (clicks_total / imps_total * 100) if imps_total > 0 else 0.0,
-                    "spend": spend_total, "conversions": 0, "revenue": 0.0, "roas": 0.0,
-                })
-            else:
-                # 집계 행: 일수로 균등 분배해 차트 스파이크 방지
-                d0 = datetime.strptime(str(start_date), "%Y-%m-%d")
-                d1 = datetime.strptime(str(end_date), "%Y-%m-%d")
-                num_days = max((d1 - d0).days + 1, 1)
-                daily_spend = spend_total / num_days
-                daily_clicks = clicks_total / num_days
-                daily_imps = imps_total / num_days
-                for i in range(num_days):
-                    day = (d0 + timedelta(days=i)).strftime("%Y-%m-%d")
-                    rows.append({
-                        "date": day, "campaign": camp_name,
-                        "impressions": daily_imps, "clicks": daily_clicks,
-                        "ctr": (daily_clicks / daily_imps * 100) if daily_imps > 0 else 0.0,
-                        "spend": daily_spend, "conversions": 0, "revenue": 0.0, "roas": 0.0,
-                    })
+            camp_id = item.get("id", "")
+            camp_name = camp_map.get(camp_id, camp_id)
+            spend = float(item.get("salesAmt", 0))
+            clicks = int(item.get("clkCnt", 0))
+            impressions = int(item.get("impCnt", 0))
+            rows.append({
+                "date": date_str,
+                "campaign": camp_name,
+                "impressions": impressions,
+                "clicks": clicks,
+                "ctr": (clicks / impressions * 100) if impressions > 0 else 0.0,
+                "spend": spend,
+                "conversions": 0,
+                "revenue": 0.0,
+                "roas": 0.0,
+            })
 
     if stat_errors and not rows:
-        raise RuntimeError("NAVER API 오류: " + " | ".join(stat_errors[:2]))
+        raise RuntimeError("NAVER API 오류: " + " | ".join(stat_errors[:3]))
 
     return pd.DataFrame(rows) if rows else pd.DataFrame(columns=EMPTY_COLS)
